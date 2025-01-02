@@ -6,6 +6,7 @@
 #include "../config/simulationconfig.hpp"
 #include "../config/agentconfig.hpp"
 #include "../config/exchangeconfig.hpp"
+#include "../config/marketwatcherconfig.hpp"
 #include "../message/config_message.hpp"
 
 class OrchestratorAgent : public Agent 
@@ -41,6 +42,19 @@ public:
                     configureNode(trader_config);
                 }
 
+                // Initialise watchers 
+                for (auto watcher_config : simulation->watchers())
+                {
+                    std::cout << "Initialising watcher: "
+                                << watcher_config->addr 
+                                << " for exchange " 
+                                << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->exchange_name
+                                << " with ticker "
+                                << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->ticker 
+                                << std::endl;
+                    configureNode(watcher_config);
+                }
+
                 // Wait for this trial to finish before starting the next one
                 std::cout << "Simulation " << i << " configured." << std::endl;
                 std::cout << "Waiting " << simulation->time() << " seconds for simulation trial to end..." << std::endl;
@@ -56,7 +70,7 @@ public:
         std::cout << "Initialising agent: " << to_string(config->type) << " with addr: " << config->addr << "\n";
         this->connect(std::string(config->addr), std::to_string(config->agent_id), [=, this](){
 
-            ConfigMessagePtr msg = std::make_shared<ConfigMessage>();
+        ConfigMessagePtr msg = std::make_shared<ConfigMessage>();
             msg->config = config;
 
             std::string agent_id = std::to_string(config->agent_id);

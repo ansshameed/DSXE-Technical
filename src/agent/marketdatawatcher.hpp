@@ -12,6 +12,9 @@ public:
     {
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
+            std::cout << "Successfully connected to exchange: " 
+              << config->exchange_name 
+              << " for ticker " << config->ticker << std::endl;
             subscribeToMarket(config->exchange_name, config->ticker);
         });
     };
@@ -32,6 +35,8 @@ public:
         msg->ticker = std::string{ticker};
         msg->address = myAddr() + std::string{":"} + std::to_string(myPort());
 
+        std::cout << "Subscribing to market data for " << ticker << " from " << exchange << std::endl; 
+
         Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
     }
 
@@ -48,9 +53,9 @@ private:
     void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
     {
         if (message->type == MessageType::MARKET_DATA)
-        {
-            onMarketData(sender, std::dynamic_pointer_cast<MarketDataMessage>(message));
-        }
+            {
+                onMarketData(sender, std::dynamic_pointer_cast<MarketDataMessage>(message));
+            }
     }
 
 };

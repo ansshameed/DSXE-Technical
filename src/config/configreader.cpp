@@ -13,13 +13,13 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
     pugi::xml_node simulation = doc.child("simulation");
 
     // Parse through the general configuration
-    pugi::xml_node general = simulation.child("general");
-    int time = general.child("time").text().as_int();
-    int repetitions = general.child("repetitions").text().as_int();
-
+    pugi::xml_node parameters = simulation.child("parameters");
+    int time = parameters.child("time").text().as_int(120); // Default to 120 seconds
+    int repetitions = parameters.child("repetitions").text().as_int(1); // Default to 1 repetition
     // Parse through the available instances
     std::vector<std::string> exchange_addrs;
     std::vector<std::string> trader_addrs;
+    std::vector<std::string> watcher_addrs;
     
     pugi::xml_node instances = simulation.child("instances");
     for (auto instance : instances.children())
@@ -32,9 +32,13 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         {
             exchange_addrs.push_back(addr);
         }
-        else
+        else if (std::string{instance.attribute("agent-type").value()} == "trader")
         {
             trader_addrs.push_back(addr);
+        }
+        else if (std::string{instance.attribute("agent-type").value()} == "watcher")
+        {
+            watcher_addrs.push_back(addr);
         }
     }
 
@@ -71,7 +75,25 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         ++agent_id;
     }
 
-    SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs);
+    // Watchers
+    std::vector<AgentConfigPtr> watcher_configs;
+    int watcher_instance_id = 0;
+    pugi::xml_node watchers = simulation.child("agents").child("watchers");
+    for (auto watcher : watchers.children())
+    {
+        AgentConfigPtr watcher_config = configureMarketWatcher(
+            agent_id,
+            watcher,
+            watcher_addrs.at(watcher_instance_id),
+            exchange_addrs_map
+        );
+        watcher_configs.push_back(watcher_config);
+        ++watcher_instance_id;
+        ++agent_id;
+    }
+
+
+    SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs, watcher_configs);
     return simulation_config;
 }
 
@@ -189,6 +211,10 @@ AgentConfigPtr ConfigReader::configureMarketWatcher(int id, pugi::xml_node& xml_
     config->exchange_addr = exchange_addrs.at(config->exchange_name);
     
     config->ticker = std::string{xml_node.attribute("ticker").value()};
+
+    std::cout << "Configuring Market Watcher: Exchange=" << config->exchange_name 
+          << ", Addr=" << config->exchange_addr 
+          << ", Ticker=" << config->ticker << std::endl;
 
     return std::static_pointer_cast<AgentConfig>(config);
 }
