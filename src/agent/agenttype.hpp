@@ -8,6 +8,7 @@ enum class AgentType : int
     TRADER_ZIC,
     TRADER_ZIP,
     TRADER_SHVR,
+    TRADER_RSI, // Relative Strength Index
     ARBITRAGE_TRADER
 };
 
@@ -19,6 +20,7 @@ inline std::string to_string(AgentType agent_type)
         case AgentType::TRADER_ZIC: return std::string{"TraderZIC"};
         case AgentType::TRADER_ZIP: return std::string{"TraderZIP"};
         case AgentType::TRADER_SHVR: return std::string{"TraderSHVR"};
+        case AgentType::TRADER_RSI: return std::string{"TraderRSI"};
         case AgentType::ARBITRAGE_TRADER: return std::string{"ArbitrageTrader"};
         default: return std::string{""};
     }

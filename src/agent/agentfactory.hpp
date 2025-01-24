@@ -10,6 +10,7 @@
 #include "traderzic.hpp"
 #include "traderzip.hpp"
 #include "tradershvr.hpp"
+#include "traderrsi.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -48,6 +49,12 @@ public:
                 std::shared_ptr<Agent> agent (new TraderShaver{network_entity, std::static_pointer_cast<TraderConfig>(config)});
                 return agent;
             }
+            case AgentType::TRADER_RSI:
+            {
+                int lookback = 14; // Default lookback period for RSI
+                std::shared_ptr<Agent> agent (new TraderRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -79,6 +86,7 @@ private:
         {std::string{"zic"}, AgentType::TRADER_ZIC},
         {std::string{"zip"}, AgentType::TRADER_ZIP},
         {std::string{"shvr"}, AgentType::TRADER_SHVR},
+        {std::string{"rsi"}, AgentType::TRADER_RSI},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 
