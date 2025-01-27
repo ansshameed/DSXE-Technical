@@ -16,6 +16,9 @@
 #include "agent/traderzic.hpp"
 #include "agent/tradershvr.hpp"
 #include "agent/traderrsi.hpp"
+#include "agent/tradermacd.hpp"
+#include "agent/traderzip.hpp"
+#include "agent/arbitragetrader.hpp"
 #include "agent/orchestratoragent.hpp"
 
 #include "message/message.hpp"
@@ -49,6 +52,7 @@ std::string showLocalUsage() {
     ss << "  " << "zic" << "\t\t" << "zero intelligence constrained trader" << "\n";
     ss << "  " << "shvr" << "\t\t" << "shaver trader" << "\n";
     ss << "  " << "rsi" << "\t\t" << "relative strength indicator trader" << "\n";
+    ss << "  " << "macd" << "\t" << "moving average convergence divergence trader" << "\n";
     ss << "\n";
     return ss.str();
 }
@@ -161,6 +165,29 @@ void local_runner(int argc, char** argv)
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
     }
+    else if (agent_type == "macd") 
+    { 
+    // Create configuration
+    TraderConfigPtr config = std::make_shared<TraderConfig>();
+    config->agent_id = agent_id;
+    config->exchange_name = vm["exchange-name"].as<std::string>();
+    config->exchange_addr = vm["exchange-addr"].as<std::string>();
+    config->ticker = vm["ticker"].as<std::string>();
+    config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+    config->limit = vm["limit"].as<double>();
+    config->delay = vm["delay"].as<unsigned int>();
+
+    int short_length = 12; // Example values
+    int long_length = 26; // Example values
+    int signal_length = 9; // Example values
+    double threshold = 0.0; // Example values
+    int n_to_smooth = 1; // Example values
+    size_t lookback_period = 14; // Example values
+
+    std::shared_ptr<TraderMACD> trader (new TraderMACD{&entity, config, short_length, long_length, signal_length, threshold, n_to_smooth, lookback_period});
+    entity.setAgent(std::static_pointer_cast<Agent>(trader));
+    entity.start();
+    }   
     else {
         std::cerr << "Invalid agent type: " << agent_type << "\n";
         std::cout << "\n" << showLocalUsage() << desc << std::endl;

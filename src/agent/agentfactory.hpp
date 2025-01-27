@@ -11,6 +11,7 @@
 #include "traderzip.hpp"
 #include "tradershvr.hpp"
 #include "traderrsi.hpp"
+#include "tradermacd.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -55,6 +56,17 @@ public:
                 std::shared_ptr<Agent> agent (new TraderRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback});
                 return agent;
             }
+            case AgentType::TRADER_MACD:
+            {
+                int short_period = 12;
+                int long_period = 26;
+                int signal_period = 9;
+                double threshold = 0.0;
+                int n_to_smooth = 1; // Example value for n_to_smooth
+                size_t lookback_period = 14; // Example value for lookback_period
+                std::shared_ptr<Agent> agent (new TraderMACD{network_entity, std::static_pointer_cast<TraderConfig>(config), short_period, long_period, signal_period, threshold, n_to_smooth, lookback_period});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -87,6 +99,7 @@ private:
         {std::string{"zip"}, AgentType::TRADER_ZIP},
         {std::string{"shvr"}, AgentType::TRADER_SHVR},
         {std::string{"rsi"}, AgentType::TRADER_RSI},
+        {std::string{"macd"}, AgentType::TRADER_MACD},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 

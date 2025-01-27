@@ -51,8 +51,8 @@ public:
     {
         std::cout << "Received market data from " << exchange << "\n";
 
-        // Collect closing prices from market data (prices broadcasted on the exchange)
-        closing_prices_.push_back(msg->data->last_price_traded); //rolling list stores most recent closing prices upto lookback period
+        // Collect closing prices from market data (prices broadcasted; market data received from exchange contains last traded price)
+        closing_prices_.push_back(msg->data->last_price_traded); //rolling list stores most recent closing prices upto lookback period (past 14 closing prices; the last prices traded)
         if (closing_prices_.size() > lookback_) //Adds the last price traded from market data to buffer
         {
             closing_prices_.erase(closing_prices_.begin()); //If buffer exceeds lookback, remove the oldest price
@@ -131,7 +131,7 @@ private:
 
         //Initial calculation of upsum and dnsm (lookback period); initial smoothed averages for upward and downward movements over lookback
         //RSI initially calculated on lookback period
-        for (size_t i = 1; i < lookback_; ++i) //Loop through lookback period (closing prices)
+        for (size_t i = 1; i < lookback_; ++i) //Loop through lookback period (14 closing prices)
         {
             double diff = prices[i] - prices[i - 1]; //Price difference for each consecutive price pair
             if (diff > 0.0) //If diff > 0.0 its upward price movement so add diff to upsum
