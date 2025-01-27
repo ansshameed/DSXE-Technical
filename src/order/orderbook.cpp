@@ -1,4 +1,6 @@
 #include <iostream>
+#include <algorithm>
+#include <chrono>
 
 #include "order.hpp"
 #include "orderbook.hpp"
@@ -51,24 +53,24 @@ std::optional<LimitOrderPtr> OrderBook::removeOrder(int order_id, Order::Side si
 }
 
 void OrderBook::updateOrderWithTrade(OrderPtr order, TradePtr trade)
+{
+    // Update average price executed
+    order->avg_price = ((order->cumulative_quantity * order->avg_price) + (trade->quantity * trade->price)) / (order->cumulative_quantity + trade->quantity);
+
+    // Update quantities
+    order->cumulative_quantity += trade->quantity;
+    order->remaining_quantity -= trade->quantity;
+
+    // Update order status
+    if (order->remaining_quantity == 0)
     {
-        // Update average price executed
-        order->avg_price = ((order->cumulative_quantity * order->avg_price) + (trade->quantity * trade->price)) / (order->cumulative_quantity + trade->quantity);
-
-        // Update quantities
-        order->cumulative_quantity += trade->quantity;
-        order->remaining_quantity -= trade->quantity;
-
-        // Update order status
-        if (order->remaining_quantity == 0)
-        {
-            order->setStatus(Order::Status::FILLED);
-        }
-        else
-        {
-            order->setStatus(Order::Status::PARTIALLY_FILLED);
-        }
+        order->setStatus(Order::Status::FILLED);
     }
+    else
+    {
+        order->setStatus(Order::Status::PARTIALLY_FILLED);
+    }
+}
 
 std::optional<LimitOrderPtr> OrderBook::bestBid()
 {
@@ -150,13 +152,41 @@ bool OrderBook::contains(int order_id, Order::Side side)
     }
 }
 
+void OrderBook::updateRollingWindow(double high_price, double low_price)
+{
+    high_prices_.push_back(high_price);
+    low_prices_.push_back(low_price);
+    if (high_prices_.size() > lookback_period_)
+    {
+        high_prices_.pop_front();
+        low_prices_.pop_front();
+    }
+}
+
+std::optional<double> OrderBook::calculateHigh()
+{
+    if (high_prices_.empty()) return std::nullopt;
+    return *std::max_element(high_prices_.begin(), high_prices_.end());
+}
+
+std::optional<double> OrderBook::calculateLow()
+{
+    if (low_prices_.empty()) return std::nullopt;
+    return *std::min_element(low_prices_.begin(), low_prices_.end());
+}
+
 void OrderBook::logTrade(TradePtr trade)
 {
+    std::cout << "Logging trade: Price = " << trade->price << ", Quantity = " << trade->quantity << "\n";
     last_trade_ = trade;
-    trade_high_ = trade_high_.has_value() ? std::max(trade_high_.value(), trade->price) : trade->price;
-    trade_low_ = trade_low_.has_value() ? std::min(trade_low_.value(), trade->price) : trade->price;
+    updateRollingWindow(trade->price, trade->price);
+    trade_high_ = calculateHigh();
+    trade_low_ = calculateLow();
     trade_volume_ += trade->quantity;
     ++trade_count_;
+
+    // Print updated high and low prices
+    std::cout << "Updated High Price: " << trade_high_.value() << ", Updated Low Price: " << trade_low_.value() << "\n";
 }
 
 MarketDataPtr OrderBook::getLiveMarketData()
@@ -166,7 +196,7 @@ MarketDataPtr OrderBook::getLiveMarketData()
     data->best_bid = bestBid().has_value() ? bestBid().value()->price : -1;
     data->best_ask = bestAsk().has_value() ? bestAsk().value()->price : -1;
     data->best_bid_size = bestBidSize();
-    data->best_ask_size =  bestAskSize();
+    data->best_ask_size = bestAskSize();
 
     data->asks_volume = asks_volume_;
     data->bids_volume = bids_volume_;

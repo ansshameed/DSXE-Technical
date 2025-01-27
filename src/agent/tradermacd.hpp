@@ -53,26 +53,27 @@ public:
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
         std::cout << "Received market data from " << exchange << "\n";
+        std::cout << "High Price: " << msg->data->high_price << ", Low Price: " << msg->data->low_price << "\n";
         
-        prices_.push_back(msg->data->last_price_traded);
-        highs_.push_back(msg->data->high_price);
-        lows_.push_back(msg->data->low_price);
-        closes_.push_back(msg->data->last_price_traded);
+        prices_.push_back(msg->data->last_price_traded); // Add the last traded price to the list of prices
+        highs_.push_back(msg->data->high_price); // Stores the high price for the current time period 
+        lows_.push_back(msg->data->low_price); // Stores the low price for the current time period
+        closes_.push_back(msg->data->last_price_traded); // Stores the last traded price for the current time period (closing price)
 
-        updateRollingWindow(msg->data->high_price, msg->data->low_price);
+        updateRollingWindow(msg->data->high_price, msg->data->low_price); // Update the rolling window with the high and low prices for ATR calculations
 
-        if (prices_.size() >= long_length_)
+        if (prices_.size() >= long_length_) // If there are enough prices to calculate MACD (long length is minimum number of datapoints required for calculation; slow EMA)
         {
-            auto [macd_line, signal_line] = calculateMACD();
-            double macd = macd_line.back();
-            double signal = signal_line.back();
-            double histogram = macd - signal;
+            auto [macd_line, signal_line] = calculateMACD(); // Calculate MACD and signal line
+            double macd = macd_line.back(); // Get the most recent MACD value
+            double signal = signal_line.back(); // Get the most recent signal line value
+            double histogram = macd - signal; // Calculate the histogram as difference between MACD and signal line (indicates divergence or convergence between MACD and signal line)
 
-            if (histogram > threshold_ && trader_side_ == Order::Side::BID)
+            if (histogram > threshold_ && trader_side_ == Order::Side::BID) // If histogram is greater than threshold and trader is a buyer, buy signal is generated
             {
                 placeOrder(Order::Side::BID);
             } 
-            else if (histogram < -threshold_ && trader_side_ == Order::Side::ASK)
+            else if (histogram < -threshold_ && trader_side_ == Order::Side::ASK) // If histogram is less than negative threshold and trader is a seller, sell signal is generated
             {
                 placeOrder(Order::Side::ASK);
             }

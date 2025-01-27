@@ -2,7 +2,7 @@
 <simulation>
     <parameters>
         <repetitions>1</repetitions>
-        <time>30</time>
+        <time>2</time>
     </parameters>
     <instances>
         <instance ip="127.0.0.1" port="9999" agent-type="exchange"/>
@@ -14,7 +14,7 @@
     </instances>
     <agents>
         <exchanges>
-            <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="30"/>
+            <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="2"/>
         </exchanges>
         <traders>
             <macd exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>

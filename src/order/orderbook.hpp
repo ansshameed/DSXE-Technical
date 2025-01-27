@@ -6,6 +6,8 @@
 #include <chrono>
 #include <queue>
 #include <unordered_map>
+#include <deque>
+#include <optional>
 
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
@@ -79,6 +81,9 @@ public:
     }
 
 private:
+    void updateRollingWindow(double high_price, double low_price);
+    std::optional<double> calculateHigh();
+    std::optional<double> calculateLow();
 
     std::string ticker_;
     OrderQueue bids_;
@@ -97,6 +102,10 @@ private:
     std::optional<double> trade_low_;
     int trade_volume_;
     int trade_count_;
+
+    std::deque<double> high_prices_;
+    std::deque<double> low_prices_;
+    const size_t lookback_period_ = 14;
 };
 
-#endif
+#endif // ORDERBOOK_HPP
