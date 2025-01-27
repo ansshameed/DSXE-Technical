@@ -54,14 +54,25 @@ public:
 
         // Collect closing prices from market data (prices broadcasted; market data received from exchange contains last traded price)
         closing_prices_.push_back(msg->data->last_price_traded); //rolling list stores most recent closing prices upto lookback period (past 14 closing prices; the last prices traded)
-        if (closing_prices_.size() > lookback_) //Adds the last price traded from market data to buffer
+        if (closing_prices_.size() > lookback_ + 1) //Adds the last price traded from market data to buffer
         {
             closing_prices_.erase(closing_prices_.begin()); //If buffer exceeds lookback, remove the oldest price
         }
 
+        //std::cout << "Closing prices: ";
+        //for (const auto& price : closing_prices_) {
+            //std::cout << price << " ";
+        //}
+        //std::cout << "\n";
+
         // Calculate RSI (only when no. of closing prices is equal to lookback)
-        if (closing_prices_.size() == lookback_)
+        if (closing_prices_.size() >= lookback_)
         {
+            //for (const auto& price : closing_prices_) {
+                //std::cout << price << " ";
+            //}
+            //std::cout << "\n";
+
             double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
             std::cout << "RSI: " << rsi << "\n";
 
@@ -128,11 +139,16 @@ private:
     // Calculate RSI based on closing prices
     double calculateRSI(const std::vector<double>& prices)
     {
+        if (prices.size() < lookback_) {
+            return 50.0; // Neutral RSI
+        }
+
         double upsum = 1.e-60, dnsm = 1.e-60; //Avoid division by zero. Upsum = sum of upward price movements (gains). Dnsm = sum of downward price movements (losses)
+        size_t initial_calculation_period = std::min(static_cast<size_t>(lookback_), prices.size());
 
         //Initial calculation of upsum and dnsm (lookback period); initial smoothed averages for upward and downward movements over lookback
         //RSI initially calculated on lookback period
-        for (size_t i = 1; i < lookback_; ++i) //Loop through lookback period (14 closing prices)
+        for (size_t i = 1; i < initial_calculation_period; ++i) //Loop through lookback period (14 closing prices)
         {
             double diff = prices[i] - prices[i - 1]; //Price difference for each consecutive price pair
             if (diff > 0.0) //If diff > 0.0 its upward price movement so add diff to upsum
@@ -145,20 +161,27 @@ private:
 
         //Processes remaining prices sequentially to dynamically update smoothed averages using exponential smoothing
         //RSI continuously updated using exponential smoothing (historical trend via upsum and dnsm and the new prices differences)
-        for (size_t i = lookback_; i < prices.size(); ++i) //Loop through remaining closing prices and update upsum and dnsm (prices after lookback period)
+        for (size_t i = initial_calculation_period; i < prices.size(); ++i) //Loop through remaining closing prices and update upsum and dnsm (prices after lookback period)
         {
             double diff = prices[i] - prices[i - 1]; //Price difference for each consecutive price pair
+            //std::cout << "Processing price: " << prices[i] << ", Previous price: " << prices[i - 1] << ", Difference: " << diff << "\n"; // Print the price difference
             if (diff > 0.0) //If diff > 0.0 its upward price movement
             {
                 upsum = ((lookback_ - 1) * upsum + diff) / lookback_; //Update upsum using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new gain)
                 dnsm *= (lookback_ - 1.0) / lookback_; //Update dnsm using exponential smoothing. Scales down dnsm to reflect new price difference (new gain)
+                std::cout << "updated" << "\n";
             }
             else
             {
                 dnsm = ((lookback_ - 1) * dnsm - diff) / lookback_; //Update dnsm using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new loss)
                 upsum *= (lookback_ - 1.0) / lookback_; //Update upsum using exponential smoothing. Scales down upsum to reflect new price difference (new loss)
+                std::cout << "updated" << "\n"; // Print updated averages for loss
             }
         }
+        if (upsum + dnsm <= 0.0) {
+            return 50.0;
+        } 
+
         return 100.0 * upsum / (upsum + dnsm); //Calculate RSI; normalises ratio of avg. gains (upsum) to total movement (upsum + dnsm) to 0-100 scale. RSI < 30: oversold, RSI > 70: overbought
     }
 
