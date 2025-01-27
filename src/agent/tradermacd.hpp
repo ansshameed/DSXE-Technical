@@ -53,7 +53,7 @@ public:
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
         std::cout << "Received market data from " << exchange << "\n";
-        std::cout << "High Price: " << msg->data->high_price << ", Low Price: " << msg->data->low_price << "\n";
+        //std::cout << "High Price: " << msg->data->high_price << ", Low Price: " << msg->data->low_price << "\n";
         
         prices_.push_back(msg->data->last_price_traded); // Add the last traded price to the list of prices
         highs_.push_back(msg->data->high_price); // Stores the high price for the current time period 
@@ -69,12 +69,16 @@ public:
             double signal = signal_line.back(); // Get the most recent signal line value
             double histogram = macd - signal; // Calculate the histogram as difference between MACD and signal line (indicates divergence or convergence between MACD and signal line)
 
+            //std::cout << "MACD: " << macd << ", Signal: " << signal << ", Histogram: " << histogram << "\n";
+
             if (histogram > threshold_ && trader_side_ == Order::Side::BID) // If histogram is greater than threshold and trader is a buyer, buy signal is generated
-            {
+            {   
+                //std::cout << "Buy signal detected. Placing BID order.\n";
                 placeOrder(Order::Side::BID);
             } 
             else if (histogram < -threshold_ && trader_side_ == Order::Side::ASK) // If histogram is less than negative threshold and trader is a seller, sell signal is generated
-            {
+            {   
+                //std::cout << "Sell signal detected. Placing ASK order.\n";
                 placeOrder(Order::Side::ASK);
             }
         }
@@ -155,6 +159,9 @@ private:
 
             macd_line[icase] = (short_sum - long_sum) / (denom + 1.e-15); // ATR normalises MACD to account for volatility
             macd_line[icase] = 100.0 * normal_cdf(1.0 + macd_line[icase]) - 50.0;
+
+            //std::cout << "Price[" << icase << "]: " << prices_[icase] << ", Short EMA: " << short_sum 
+                      //<< ", Long EMA: " << long_sum << ", MACD: " << macd_line[icase] << "\n";
         }
 
         // Calculate the signal line as an EMA of the MACD line
@@ -194,6 +201,7 @@ private:
             double high_close = std::abs(high_window_[i - start] - closes_[i - 1]);
             double low_close = std::abs(low_window_[i - start] - closes_[i - 1]);
             atr += std::max({high_low, high_close, low_close});
+            //std::cout << "ATR: " << atr << "\n";
         }
 
         return atr / lookback;
