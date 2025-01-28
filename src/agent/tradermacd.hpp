@@ -130,86 +130,91 @@ private:
     }
 
     void updateRollingWindow(double high_price, double low_price) { 
-        high_window_.push_back(high_price); 
-        low_window_.push_back(low_price);
-        if (high_window_.size() > lookback_period_) {
-            high_window_.pop_front();
-            low_window_.pop_front();
+        high_window_.push_back(high_price); // Add high price to the high price window
+        low_window_.push_back(low_price); // Add low price to the low price window
+        if (high_window_.size() > lookback_period_) { // If the window size is greater than the lookback period, remove the oldest value (ensures window size = lookback)
+            high_window_.pop_front(); // Remove the oldest high price
+            low_window_.pop_front(); // Remove the oldest low price
         }
     }
 
     std::pair<std::vector<double>, std::vector<double>> calculateMACD()
-    {
-        std::vector<double> macd_line(prices_.size(), 0.0);
-        std::vector<double> signal_line(prices_.size(), 0.0);
-        double long_sum = prices_[0];
-        double short_sum = prices_[0];
-        double long_alpha = 2.0 / (long_length_ + 1.0);
-        double short_alpha = 2.0 / (short_length_ + 1.0);
-        double signal_alpha = 2.0 / (signal_length_ + 1.0);
+    {   
+        // Store MACD and signal line values for each price point
+        std::vector<double> macd_line(prices_.size(), 0.0); // Initialise MACD line with zeros 
+        std::vector<double> signal_line(prices_.size(), 0.0); // Initialise signal line with zeros
 
-        for (size_t icase = 1; icase < prices_.size(); ++icase)
+        double long_sum = prices_[0]; // Initialise long EMA sum with first price (26-period)
+        double short_sum = prices_[0]; // Initialise short EMA sum with first price (12-period)
+
+        double long_alpha = 2.0 / (long_length_ + 1.0); // Calculate alpha for long EMA
+        double short_alpha = 2.0 / (short_length_ + 1.0);  // Calculate alpha for short EMA
+        double signal_alpha = 2.0 / (signal_length_ + 1.0); // Calculate alpha for signal line (9-period)
+
+        // Calculate MACD line and EMAs for each price point. 
+        for (size_t icase = 1; icase < prices_.size(); ++icase) // Loop through each price point
         {
-            long_sum = long_alpha * prices_[icase] + (1.0 - long_alpha) * long_sum;
-            short_sum = short_alpha * prices_[icase] + (1.0 - short_alpha) * short_sum;
+            long_sum = long_alpha * prices_[icase] + (1.0 - long_alpha) * long_sum; // Calculate long EMA
+            short_sum = short_alpha * prices_[icase] + (1.0 - short_alpha) * short_sum; // Calculate short EMA
+            double diff = 0.5 * (long_length_ - 1.0) - 0.5 * (short_length_ - 1.0); // Calculate difference between long and short EMA lengths
 
-            double diff = 0.5 * (long_length_ - 1.0) - 0.5 * (short_length_ - 1.0);
-            double denom = std::sqrt(std::abs(diff));
-            denom *= ATR(icase, lookback_period_); 
+            double denom = std::sqrt(std::abs(diff)); // Normalisation factor for MACD using EMA difference
+            denom *= ATR(icase, lookback_period_); // Normalisation factor scaled by ATR to account for volatility
 
-            macd_line[icase] = (short_sum - long_sum) / (denom + 1.e-15); // ATR normalises MACD to account for volatility
-            macd_line[icase] = 100.0 * normal_cdf(1.0 + macd_line[icase]) - 50.0;
+            macd_line[icase] = (short_sum - long_sum) / (denom + 1.e-15); // MACD normalisation 
+            macd_line[icase] = 100.0 * normal_cdf(1.0 + macd_line[icase]) - 50.0; // Normalise MACD to 0-100 scale (applies normal cumulative distributin function to MACD; CDF) 
 
             //std::cout << "Price[" << icase << "]: " << prices_[icase] << ", Short EMA: " << short_sum 
                       //<< ", Long EMA: " << long_sum << ", MACD: " << macd_line[icase] << "\n";
         }
 
-        // Calculate the signal line as an EMA of the MACD line
-        signal_line[0] = macd_line[0];
-        for (size_t icase = 1; icase < macd_line.size(); ++icase)
+        signal_line[0] = macd_line[0]; // Calculate the signal line as an EMA of the MACD line
+        for (size_t icase = 1; icase < macd_line.size(); ++icase) // Loop through each price point
         {
-            signal_line[icase] = signal_alpha * macd_line[icase] + (1.0 - signal_alpha) * signal_line[icase - 1];
+            signal_line[icase] = signal_alpha * macd_line[icase] + (1.0 - signal_alpha) * signal_line[icase - 1]; // Calculate signal line as EMA of MACD line using signal_alpha as smoothing factor
         }
 
-        if (n_to_smooth_ > 1)
+        if (n_to_smooth_ > 1) // If additional smoothing steps are required
         {
-            double alpha = 2.0 / (n_to_smooth_ + 1.0);
-            double smoothed = macd_line[0];
-            for (size_t icase = 1; icase < macd_line.size(); ++icase)
+            double alpha = 2.0 / (n_to_smooth_ + 1.0); // Calculate alpha for additional smoothing
+            double smoothed = macd_line[0]; // Initialise smoothed MACD line with first MACD value
+            for (size_t icase = 1; icase < macd_line.size(); ++icase) // Loop through each price point
             {
-                smoothed = alpha * macd_line[icase] + (1.0 - alpha) * smoothed;
-                macd_line[icase] -= smoothed;
+                smoothed = alpha * macd_line[icase] + (1.0 - alpha) * smoothed; // Apply additional smoothing to MACD line
+                macd_line[icase] -= smoothed; // Subtract smoothed MACD line from MACD line
             }
         }
 
-        return {macd_line, signal_line};
+        return {macd_line, signal_line}; // Return MACD line and signal line
     }
 
 
     double ATR(size_t end, size_t lookback)
     {
-        if (end < lookback) { 
-            lookback = end + 1; // Adjust lookback if not enough values
+        if (end < lookback) { // If not enough values to calculate ATR
+            lookback = end + 1; // Adjust lookback if not enough values to include all available data points 
         }
     
-        double atr = 0.0;
-        size_t start = end - lookback + 1;
+        double atr = 0.0; // Initialise ATR with zero (accumulate total true range over lookback period)
+        size_t start = end - lookback + 1; // Calculate start index for ATR calculation for rolling window 
 
-        for (size_t i = start; i <= end; ++i)
+        for (size_t i = start; i <= end; ++i) // Loop through rolling window to calculate the TR (True Range) for each period and accumulate total ATR
         {
-            double high_low = high_window_[i - start] - low_window_[i - start];
-            double high_close = std::abs(high_window_[i - start] - closes_[i - 1]);
-            double low_close = std::abs(low_window_[i - start] - closes_[i - 1]);
-            atr += std::max({high_low, high_close, low_close});
+            //high_window_[i - start] = highs_[i]; = high price for the current time period, low_window_[i - start] = lows_[i]; = low price for the current time period, closes_[i - 1] = closes_[i - 1]; = closing price for the previous time period
+            double high_low = high_window_[i - start] - low_window_[i - start]; // High-low range for the current time period (difference between high and low prices for current period)
+            double high_close = std::abs(high_window_[i - start] - closes_[i - 1]); // Abs. difference between current high price and previous closing price
+            double low_close = std::abs(low_window_[i - start] - closes_[i - 1]); // Abs. difference between current low price and previous closing price
+            atr += std::max({high_low, high_close, low_close}); // Calculate the True Range (TR) for each period and accumulate total ATR
             //std::cout << "ATR: " << atr << "\n";
         }
 
-        return atr / lookback;
+        return atr / lookback; // Return the average ATR over the lookback period
     }
 
+    // Calculate the normal CDF for given value 
     double normal_cdf(double value)
     {  
-        return 0.5 * std::erfc(-value / std::sqrt(2.0));
+        return 0.5 * std::erfc(-value / std::sqrt(2.0)); // Gaussian CDF (error function) for normal distribution. Result scaled by 0.5 to normalise to 0-1 scale
     } 
 
     void placeOrder(Order::Side side)
