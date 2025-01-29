@@ -69,7 +69,7 @@ public:
             double signal = signal_line.back(); // Get the most recent signal line value
             double histogram = macd - signal; // Calculate the histogram as difference between MACD and signal line (indicates divergence or convergence between MACD and signal line)
 
-            //std::cout << "MACD: " << macd << ", Signal: " << signal << ", Histogram: " << histogram << "\n";
+            std::cout << "MACD: " << macd << ", Signal: " << signal << ", Histogram: " << histogram << "\n";
 
             if (histogram > threshold_ && trader_side_ == Order::Side::BID) // If histogram is greater than threshold and trader is a buyer, buy signal is generated
             {   
@@ -225,7 +225,8 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        int quantity = 100;
+        //int quantity = 100;
+        int quantity = getRandomOrderSize(); // Use random order size
         double price = getQuotePrice(side);
         placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_);
 

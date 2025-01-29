@@ -62,7 +62,7 @@ public:
                 int short_period = 12; // Fast EMA period 
                 int long_period = 26; // Slow EMA period 
                 int signal_period = 9; // Signal line period (EMA of MACD line)
-                double threshold = 500; // Minimum difference threshold between MACD and signal line (histogram) to trigger a trade 
+                double threshold = 0.5; // Minimum difference threshold between MACD and signal line (histogram) to trigger a trade 
                 int n_to_smooth = 1; // No. of additional smoothing steps applied to MACD line (1 = minimal or no extra smoothign)
                 size_t lookback_period = 14; // Lookback period for ATR calculation (normalisation factor)
                 std::shared_ptr<Agent> agent (new TraderMACD{network_entity, std::static_pointer_cast<TraderConfig>(config), short_period, long_period, signal_period, threshold, n_to_smooth, lookback_period});

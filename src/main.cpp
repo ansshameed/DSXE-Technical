@@ -182,7 +182,7 @@ void local_runner(int argc, char** argv)
     int short_length = 12; // Example values
     int long_length = 26; // Example values
     int signal_length = 9; // Example values
-    double threshold = 0.0; // Example values
+    double threshold = 0.5; // Example values
     int n_to_smooth = 1; // Example values
     size_t lookback_period = 14; // Example values
 
@@ -203,8 +203,8 @@ void local_runner(int argc, char** argv)
     config->delay = vm["delay"].as<unsigned int>();
 
     int lookback_period = 14; // Example value (recommended use 5 for faster responsiveness)
-    int delta_length = 3; // Example values
-    double threshold = 150; // Example values
+    int delta_length = 4; // Example values
+    double threshold = 10; // Example values
 
     std::shared_ptr<TraderOBVDelta> trader (new TraderOBVDelta{&entity, config, lookback_period, delta_length, threshold});
     entity.setAgent(std::static_pointer_cast<Agent>(trader));

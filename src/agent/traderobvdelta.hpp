@@ -206,7 +206,7 @@ private:
             cancelOrder(exchange_, side, ticker_, last_accepted_order_id_.value());
             last_accepted_order_id_ = std::nullopt;
         }
-
+        //int quantity = 100; 
         int quantity = getRandomOrderSize(); 
         double price = getQuotePrice(side);
         placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_);

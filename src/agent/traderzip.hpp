@@ -301,6 +301,7 @@ private:
 
         // Place new order with a new price
         last_price_ = getQuotePrice();
+        //int quantity = getRandomOrderSize(); // Use random order size (maybe replace 100 quantity below with random order size)
         placeLimitOrder(exchange_, trader_side_, ticker_, 100, last_price_, limit_price_, Order::TimeInForce::GTC, ++last_client_order_id_);
         std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << 100 << " @ " << last_price_ << "\n";
     }

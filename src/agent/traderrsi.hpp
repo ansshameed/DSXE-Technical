@@ -187,13 +187,26 @@ private:
 
     void placeOrder(Order::Side side) //Places limit order on exchange 
     {
+
+        //NOTE - COOLDOWN PERIOD: maybe add cooldown period mechanism for when excessive trades happen (only one trade within cooldown period; useful for extreme RSI values i.e. 0 or 100)
+        //std::chrono::steady_clock::time_point last_trade_time_; PRIVATE VARIABLE 
+        //unsigned int cooldown_duration_ms_ = 5000; // Cooldown period in milliseconds (e.g., 5 seconds) PRIVATE VARIABLE 
+        //auto now = std::chrono::steady_clock::now();
+        //if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_trade_time_).count() < cooldown_duration_ms_)
+        //{
+            //std::cout << "Skipping trade due to cooldown period." << std::endl;
+            //return; // Exit function if still in cooldown
+        //}
+
+
         if (cancelling_ && last_accepted_order_id_.has_value()) //Check if cancelling is enabled and last order was accepted
         {
             cancelOrder(exchange_, side, ticker_, last_accepted_order_id_.value()); //Cancel last accepted order
             last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
         }
 
-        int quantity = 100; //Order fixed at 100 quantity
+        //int quantity = 100; //Order fixed at 100 quantity
+        int quantity = getRandomOrderSize(); // Use random order size
         double price = getQuotePrice(side); //Get quote price based on trading side (BID or ASK)    
         placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_); //Place limit order on exchange
 
