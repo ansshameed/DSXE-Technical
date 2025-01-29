@@ -12,6 +12,7 @@
 #include "tradershvr.hpp"
 #include "traderrsi.hpp"
 #include "tradermacd.hpp"
+#include "traderobvdelta.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -61,10 +62,18 @@ public:
                 int short_period = 12; // Fast EMA period 
                 int long_period = 26; // Slow EMA period 
                 int signal_period = 9; // Signal line period (EMA of MACD line)
-                double threshold = 0.0; // Minimum difference threshold between MACD and signal line (histogram) to trigger a trade 
+                double threshold = 500; // Minimum difference threshold between MACD and signal line (histogram) to trigger a trade 
                 int n_to_smooth = 1; // No. of additional smoothing steps applied to MACD line (1 = minimal or no extra smoothign)
                 size_t lookback_period = 14; // Lookback period for ATR calculation (normalisation factor)
                 std::shared_ptr<Agent> agent (new TraderMACD{network_entity, std::static_pointer_cast<TraderConfig>(config), short_period, long_period, signal_period, threshold, n_to_smooth, lookback_period});
+                return agent;
+            }
+            case AgentType::TRADER_OBV_DELTA: 
+            { 
+                int lookback_period = 14; // Default lookback period for OBV Delta
+                int delta_length = 4; // Default delta length for OBV Delta
+                double threshold = 10; // Default threshold for OBV Delta (5-10% of average total volume) 
+                std::shared_ptr<Agent> agent (new TraderOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, delta_length, threshold});
                 return agent;
             }
             case AgentType::ARBITRAGE_TRADER:
@@ -100,6 +109,7 @@ private:
         {std::string{"shvr"}, AgentType::TRADER_SHVR},
         {std::string{"rsi"}, AgentType::TRADER_RSI},
         {std::string{"macd"}, AgentType::TRADER_MACD},
+        {std::string{"obvd"}, AgentType::TRADER_OBV_DELTA},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 

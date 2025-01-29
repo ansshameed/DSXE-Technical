@@ -33,6 +33,8 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
         int cumulative_volume_traded;
         int trades_count;
 
+        double volume_per_tick; 
+
         unsigned long long timestamp;
 
         std::string describeCSVHeaders() const override
@@ -85,6 +87,8 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
             ar & low_price;
             ar & cumulative_volume_traded;
             ar & trades_count;
+
+            ar & volume_per_tick;
 
             ar & timestamp;
         }

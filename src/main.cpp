@@ -17,6 +17,7 @@
 #include "agent/tradershvr.hpp"
 #include "agent/traderrsi.hpp"
 #include "agent/tradermacd.hpp"
+#include "agent/traderobvdelta.hpp"
 #include "agent/traderzip.hpp"
 #include "agent/arbitragetrader.hpp"
 #include "agent/orchestratoragent.hpp"
@@ -53,6 +54,7 @@ std::string showLocalUsage() {
     ss << "  " << "shvr" << "\t\t" << "shaver trader" << "\n";
     ss << "  " << "rsi" << "\t\t" << "relative strength indicator trader" << "\n";
     ss << "  " << "macd" << "\t" << "moving average convergence divergence trader" << "\n";
+    ss << "  " << "obv" << "\t\t" << "on balance volume delta trader" << "\n";
     ss << "\n";
     return ss.str();
 }
@@ -185,6 +187,26 @@ void local_runner(int argc, char** argv)
     size_t lookback_period = 14; // Example values
 
     std::shared_ptr<TraderMACD> trader (new TraderMACD{&entity, config, short_length, long_length, signal_length, threshold, n_to_smooth, lookback_period});
+    entity.setAgent(std::static_pointer_cast<Agent>(trader));
+    entity.start();
+    }
+    else if (agent_type == "obvd") 
+    { 
+    // Create configuration
+    TraderConfigPtr config = std::make_shared<TraderConfig>();
+    config->agent_id = agent_id;
+    config->exchange_name = vm["exchange-name"].as<std::string>();
+    config->exchange_addr = vm["exchange-addr"].as<std::string>();
+    config->ticker = vm["ticker"].as<std::string>();
+    config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+    config->limit = vm["limit"].as<double>();
+    config->delay = vm["delay"].as<unsigned int>();
+
+    int lookback_period = 14; // Example value
+    int delta_length = 4; // Example values
+    double threshold = 500; // Example values
+
+    std::shared_ptr<TraderOBVDelta> trader (new TraderOBVDelta{&entity, config, lookback_period, delta_length, threshold});
     entity.setAgent(std::static_pointer_cast<Agent>(trader));
     entity.start();
     }   

@@ -46,6 +46,9 @@ public:
     /** The trader will remain idle and no handlers will be called until the specified duration after trading start. */
     void addDelayedStart(int delay_in_seconds);
 
+    /** Returns a random price for the order. */
+    int getRandomOrderSize();
+
 protected:
 
     /** Derived classes must implement these: */

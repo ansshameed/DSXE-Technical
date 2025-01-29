@@ -1,5 +1,6 @@
 #include <iostream>
 #include <optional>
+#include <random>
 
 #include "traderagent.hpp"
 
@@ -100,6 +101,22 @@ void TraderAgent::subscribeToMarket(std::string_view exchange, std::string_view 
     msg->address = myAddr() + std::string{":"} + std::to_string(myPort());
 
     Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
+}
+
+// Random order size
+int TraderAgent::getRandomOrderSize() 
+{ 
+    int base_quantity = 50; // Min order sisze
+    int max_quantity = 500; // Max order size
+
+    // Create random generator 
+    static std::random_device rd; 
+    static std::mt19937 gen(rd());
+
+    // Uniform distribution
+    std::uniform_int_distribution<> dist(base_quantity, max_quantity);
+
+    return dist(gen); 
 }
 
 void TraderAgent::placeLimitOrder(std::string_view exchange, Order::Side side, std::string_view ticker, int quantity, double price, double priv_value, Order::TimeInForce time_in_force, int client_order_id)

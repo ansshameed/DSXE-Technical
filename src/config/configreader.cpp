@@ -124,6 +124,10 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         {
             return configureTrader(id, xml_node, addr, exchange_addrs, type);
         }
+        case AgentType::TRADER_OBV_DELTA:
+        {
+            return configureTrader(id, xml_node, addr, exchange_addrs, type);
+        }
         case AgentType::ARBITRAGE_TRADER:
         {
             return configureArbitrageur(id, xml_node, addr, exchange_addrs);

@@ -208,9 +208,19 @@ MarketDataPtr OrderBook::getLiveMarketData()
 
     data->high_price = trade_high_.has_value() ? trade_high_.value() : -1;
     data->low_price = trade_low_.has_value() ? trade_low_.value() : -1;
+
+    double current_volume_traded = trade_volume_;
+    if (trade_count_ <= 1) {
+        data->volume_per_tick = current_volume_traded;  // First tick takes full volume
+    } else {
+        data->volume_per_tick = std::max(0.0, current_volume_traded - previous_volume_traded_);
+    }
+    previous_volume_traded_ = current_volume_traded; // Update previous volume 
+
+
     data->cumulative_volume_traded = trade_volume_;
     data->trades_count = trade_count_;
 
     data->timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     return data;
-}
+} 

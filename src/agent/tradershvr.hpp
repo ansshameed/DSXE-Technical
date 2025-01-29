@@ -36,10 +36,12 @@ public:
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
-    {
-        int quantity = 100;
+    {   
+        std::cout << "Received market data from " << exchange << "\n";
+        //int quantity = 100;
         if (is_trading_) 
-        {
+        {   
+            int quantity = getRandomOrderSize(); // Use random order size 
             double price = getShaverPrice(msg);
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
             std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
@@ -48,8 +50,8 @@ public:
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
     {
-        std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
-        " Qty remaining = " << msg->order->remaining_quantity << "\n";
+        //std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
+        //" Qty remaining = " << msg->order->remaining_quantity << "\n";
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override

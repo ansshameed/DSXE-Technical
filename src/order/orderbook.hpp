@@ -34,7 +34,8 @@ public:
       asks_volume_{0},
       order_count_{0},
       trade_volume_{0},
-      trade_count_{0}
+      trade_count_{0}, 
+      previous_volume_traded_{0}
     {
     }
     
@@ -106,6 +107,8 @@ private:
     std::deque<double> high_prices_;
     std::deque<double> low_prices_;
     const size_t lookback_period_ = 14;
+
+    double previous_volume_traded_; 
 };
 
 #endif // ORDERBOOK_HPP

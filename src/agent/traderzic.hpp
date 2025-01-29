@@ -119,7 +119,8 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        int quantity = 100;
+        //int quantity = 100;
+        int quantity = getRandomOrderSize();
         double price = getRandomPrice();
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
 
