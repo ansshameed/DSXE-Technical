@@ -6,10 +6,10 @@
     </parameters>
     <instances>
         <instance ip="127.0.0.1" port="9999" agent-type="exchange"/>
-        <instance ip="127.0.0.1" port="8080" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8081" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8082" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8083" agent-type="trader"/>
+        <instance ip="127.0.0.1" port="8084" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8085" agent-type="watcher"/>
     </instances>
     <agents>

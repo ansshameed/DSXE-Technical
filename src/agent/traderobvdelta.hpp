@@ -50,30 +50,47 @@ public:
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
         std::cout << "Received market data from " << exchange << "\n";
+
+        if (!msg || !msg->data) {
+            std::cerr << "ERROR: Received null market data message!" << std::endl;
+            return;
+        }
         
         close_prices_.push_back(msg->data->last_price_traded);
         volumes_.push_back(msg->data->volume_per_tick); // CHANGE BECAUSE THIS IS VOLUME SINCE MARKET OPEN; NEED TRADE VOLUME PER TICK
-        std::cout << "DEBUG: Current Volume: " << msg->data->volume_per_tick << "\n"; 
+        std::cout << "DEBUG: Current Volume: " << msg->data->volume_per_tick << "\n";
 
-        if (close_prices_.size() >= lookback_length_)
-        {
-            auto delta_obv = calculateDeltaOBV(close_prices_, volumes_, lookback_length_, delta_length_);
-            
-            if (delta_obv.empty()) {
-                std::cerr << "ERROR: delta_obv is empty!" << std::endl;
-                return;
-            }
-            double latest_delta_obv = delta_obv.back();
-
-            if (latest_delta_obv > threshold_ && trader_side_ == Order::Side::BID)
-            {
-                placeOrder(Order::Side::BID);
-            }
-            else if (latest_delta_obv < -threshold_ && trader_side_ == Order::Side::ASK)
-            {
-                placeOrder(Order::Side::ASK);
-            }
+        if (close_prices_.size() < lookback_length_ || volumes_.size() < lookback_length_) {
+            std::cerr << "WARNING: Not enough data yet! Needed: " << lookback_length_ 
+                    << ", Current: " << close_prices_.size() << std::endl;
+            return;
         }
+
+        if (volumes_.empty() || volumes_.back() == 0) { 
+            std::cerr << "Skipping order: No volume in this tick." << std::endl;
+            return;
+        }
+
+        auto delta_obv = calculateDeltaOBV(close_prices_, volumes_, lookback_length_, delta_length_);
+
+        if (delta_obv.empty()) {
+            std::cerr << "ERROR: delta_obv is empty!" << std::endl;
+            return;
+        }
+
+        threshold_ = std::max(50.0, threshold_ * (1.0 - 0.02 * (volumes_.back() / 100.0)));
+
+        double latest_delta_obv = delta_obv.back();
+
+        if (latest_delta_obv > threshold_ && trader_side_ == Order::Side::BID)
+        {
+            placeOrder(Order::Side::BID);
+        }
+        else if (latest_delta_obv < -threshold_ && trader_side_ == Order::Side::ASK)
+        {
+            placeOrder(Order::Side::ASK);
+        }
+
     }
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
@@ -113,21 +130,25 @@ private:
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
     }
 
-    std::vector<double> calculateDeltaOBV(const std::vector<double>& close_prices, const std::vector<double>& volumes, int lookback_length, int delta_length)
+    std::vector<double> calculateDeltaOBV(const std::vector<double>& close_prices, 
+                                      const std::vector<double>& volumes, 
+                                      int lookback_length, 
+                                      int delta_length)
     {   
-        if (close_prices.size() < lookback_length || volumes.size() < lookback_length) {
+        size_t n = close_prices.size();
+        if (n < lookback_length || volumes.size() < lookback_length) {
             throw std::invalid_argument("Insufficient data for the given lookback length.");
         }
 
-        size_t n = close_prices.size();
         std::vector<double> output(n, 0.0);
-        size_t front_bad = lookback_length; // front_bad is the number of bad values at the front of the array (to skip initial elements in volume vector; ensures OBV calculation starts with valid data)
+        size_t front_bad = lookback_length;
 
+        // Ensure we have valid starting volume data
         for (size_t first_volume = 0; first_volume < n; first_volume++) {
             if (volumes[first_volume] > 0) {
                 break;
             }
-            front_bad++;
+            front_bad = std::min(front_bad, n - 1);
         }
 
         for (size_t i = 0; i < front_bad; i++) {
@@ -138,7 +159,12 @@ private:
             double signed_volume = 0.0;
             double total_volume = 0.0;
 
-            for (size_t i = 1; i < lookback_length && (icase - i) > 0 && (icase - i - 1) >= 0; i++) {  
+            for (size_t i = 1; i < lookback_length && (icase - i) > 0; i++) {  
+                if (icase - i - 1 < 0) {
+                    std::cerr << "ERROR: Out-of-bounds access prevented (icase - i - 1)" << std::endl;
+                    break;
+                }
+
                 if (close_prices[icase - i] > close_prices[icase - i - 1]) {
                     signed_volume += volumes[icase - i];
                 } else if (close_prices[icase - i] < close_prices[icase - i - 1]) {
@@ -157,8 +183,16 @@ private:
             output[icase] = normalized_value;
         }
 
-        front_bad += delta_length;
-        for (size_t icase = n - 1; icase >= front_bad && icase >= delta_length; icase--) {
+        if (n < front_bad + delta_length) {
+            std::cerr << "ERROR: Not enough data for delta calculation!" << std::endl;
+            return output;
+        }
+
+        for (int icase = static_cast<int>(n) - 1; icase >= static_cast<int>(front_bad + delta_length); icase--) {
+            if (icase - delta_length < 0) {
+                std::cerr << "ERROR: Out-of-bounds access prevented (icase - delta_length)\n";
+                break;
+            }
             output[icase] -= output[icase - delta_length];
         }
 
@@ -182,14 +216,19 @@ private:
 
     double getQuotePrice(Order::Side side)
     {
+        if (close_prices_.empty()) return limit_price_;  
+        
         double price = close_prices_.back();
+        
+        // Apply small variation based on OBV strength
+        double price_adjustment = std::min(5.0, std::abs(threshold_ / 1000.0)); // Example tweak
         if (side == Order::Side::BID)
         {
-            price = std::min(price, limit_price_);
+            price = std::min(price + price_adjustment, limit_price_);
         }
         else
         {
-            price = std::max(price, limit_price_);
+            price = std::max(price - price_adjustment, limit_price_);
         }
         return price;
     }

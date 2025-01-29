@@ -202,9 +202,9 @@ void local_runner(int argc, char** argv)
     config->limit = vm["limit"].as<double>();
     config->delay = vm["delay"].as<unsigned int>();
 
-    int lookback_period = 14; // Example value
-    int delta_length = 4; // Example values
-    double threshold = 500; // Example values
+    int lookback_period = 14; // Example value (recommended use 5 for faster responsiveness)
+    int delta_length = 3; // Example values
+    double threshold = 150; // Example values
 
     std::shared_ptr<TraderOBVDelta> trader (new TraderOBVDelta{&entity, config, lookback_period, delta_length, threshold});
     entity.setAgent(std::static_pointer_cast<Agent>(trader));
