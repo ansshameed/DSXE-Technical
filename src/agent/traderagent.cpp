@@ -106,7 +106,7 @@ void TraderAgent::subscribeToMarket(std::string_view exchange, std::string_view 
 // Random order size
 int TraderAgent::getRandomOrderSize() 
 { 
-    int base_quantity = 50; // Min order sisze
+    int base_quantity = 50; // Min order size
     int max_quantity = 500; // Max order size
 
     // Create random generator 
