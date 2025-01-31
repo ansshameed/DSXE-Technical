@@ -14,6 +14,7 @@
 #include "agent/stockexchange.hpp"
 #include "agent/marketdatawatcher.hpp"
 #include "agent/traderzic.hpp"
+#include "agent/traderobi.hpp"
 #include "agent/tradershvr.hpp"
 #include "agent/traderrsi.hpp"
 #include "agent/tradermacd.hpp"
@@ -55,6 +56,7 @@ std::string showLocalUsage() {
     ss << "  " << "rsi" << "\t\t" << "relative strength indicator trader" << "\n";
     ss << "  " << "macd" << "\t" << "moving average convergence divergence trader" << "\n";
     ss << "  " << "obv" << "\t\t" << "on balance volume delta trader" << "\n";
+    ss << "  " << "obi" << "\t\t" << "order book imbalance trader" << "\n";
     ss << "\n";
     return ss.str();
 }
@@ -214,7 +216,20 @@ void local_runner(int argc, char** argv)
     std::shared_ptr<TraderOBVDelta> trader (new TraderOBVDelta{&entity, config, lookback_period, delta_length, threshold});
     entity.setAgent(std::static_pointer_cast<Agent>(trader));
     entity.start();
-    }   
+    }
+    else if (agent_type == "obi") {
+
+        // Create configuration
+        MarketWatcherConfigPtr config = std::make_shared<MarketWatcherConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+
+        std::shared_ptr<TraderOBI> watcher (new TraderOBI{&entity, config});
+        entity.setAgent(std::static_pointer_cast<Agent>(trader));
+        entity.start();
+    } 
     else {
         std::cerr << "Invalid agent type: " << agent_type << "\n";
         std::cout << "\n" << showLocalUsage() << desc << std::endl;

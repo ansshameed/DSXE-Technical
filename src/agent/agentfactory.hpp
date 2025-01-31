@@ -13,6 +13,7 @@
 #include "traderrsi.hpp"
 #include "tradermacd.hpp"
 #include "traderobvdelta.hpp"
+#include "traderobi.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -80,6 +81,11 @@ public:
                 std::shared_ptr<Agent> agent (new TraderOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, delta_length, threshold});
                 return agent;
             }
+            case AgentType::TRADER_OBI:
+            {
+                std::shared_ptr<Agent> agent (new TraderOBI{network_entity, std::static_pointer_cast<TraderConfig>(config)});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -114,6 +120,7 @@ private:
         {std::string{"rsi"}, AgentType::TRADER_RSI},
         {std::string{"macd"}, AgentType::TRADER_MACD},
         {std::string{"obvd"}, AgentType::TRADER_OBV_DELTA},
+        {std::string{"obi"}, AgentType::TRADER_OBI},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 

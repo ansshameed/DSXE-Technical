@@ -11,6 +11,7 @@ enum class AgentType : int
     TRADER_RSI, // Relative Strength Index
     TRADER_MACD, // Moving Average Convergence Divergence
     TRADER_OBV_DELTA, // On Balance Volume Delta
+    TRADER_OBI, // Order Book Imbalance
     ARBITRAGE_TRADER    
 };
 
@@ -25,6 +26,7 @@ inline std::string to_string(AgentType agent_type)
         case AgentType::TRADER_RSI: return std::string{"TraderRSI"};
         case AgentType::TRADER_MACD: return std::string{"TraderMACD"};
         case AgentType::TRADER_OBV_DELTA: return std::string{"TraderOBVDelta"};
+        case AgentType::TRADER_OBI: return std::string{"TraderOBI"};
         case AgentType::ARBITRAGE_TRADER: return std::string{"ArbitrageTrader"};
         default: return std::string{""};
     }
