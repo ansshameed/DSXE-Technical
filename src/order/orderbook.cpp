@@ -189,12 +189,12 @@ void OrderBook::logTrade(TradePtr trade)
     std::cout << "Updated High Price: " << trade_high_.value() << ", Updated Low Price: " << trade_low_.value() << "\n";
 }
 
-double OrderBook::getTotalBidVolume() const
+double OrderBook::getTotalBidVolume()
 {
     return bids_volume_; 
 }
 
-double OrderBook::getTotalAskVolume() const
+double OrderBook::getTotalAskVolume() 
 {
     return asks_volume_;
 }

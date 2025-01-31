@@ -220,13 +220,13 @@ void local_runner(int argc, char** argv)
     else if (agent_type == "obi") {
 
         // Create configuration
-        MarketWatcherConfigPtr config = std::make_shared<MarketWatcherConfig>();
+        TraderConfigPtr config = std::make_shared<TraderConfig>();
         config->agent_id = agent_id;
         config->exchange_name = vm["exchange-name"].as<std::string>();
         config->exchange_addr = vm["exchange-addr"].as<std::string>();
         config->ticker = vm["ticker"].as<std::string>();
 
-        std::shared_ptr<TraderOBI> watcher (new TraderOBI{&entity, config});
+        std::shared_ptr<TraderOBI> trader (new TraderOBI{&entity, config});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
     } 

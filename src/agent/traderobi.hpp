@@ -5,9 +5,6 @@
 #include <numeric>
 #include <algorithm>
 #include "traderagent.hpp"
-#include "order/orderbook.hpp"
-#include "order/limitorder.hpp"
-#include "trade/trade.hpp"
 
 class TraderOBI : public TraderAgent
 {
@@ -56,9 +53,6 @@ public:
     {
         std::cout << "Received market data from " << exchange << "\n";
         std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
-
-        // Update the order book with the latest market data
-        updateOrderBook(msg);
 
         // Calculate Order Book Imbalance (OBI)
         double obi = calculateOBI();
