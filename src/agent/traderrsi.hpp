@@ -255,11 +255,14 @@ private:
 
         // Initialize min and max RSI values for lookback period
         for (size_t icase = stoch_lookback - 1; icase < n; ++icase) {
-            //double min_val = 1e60;  // Arbitrary high value
-            //double max_val = -1e60; // Arbitrary low value
+            double min_val = 1e60; // Arbitrary high value
+            double max_val = -1e60; // Arbitrary low value
 
-            double min_val = *std::min_element(rsi_values.begin() + icase - stoch_lookback + 1, rsi_values.begin() + icase + 1);
-            double max_val = *std::max_element(rsi_values.begin() + icase - stoch_lookback + 1, rsi_values.begin() + icase + 1);
+            // Inner loop for lookback2 window
+            for (size_t j = icase - stoch_lookback + 1; j <= icase; ++j) {
+                if (rsi_values[j] < min_val) min_val = rsi_values[j];
+                if (rsi_values[j] > max_val) max_val = rsi_values[j];
+            }
 
             // Compute Stochastic RSI
             if (max_val == min_val) {
