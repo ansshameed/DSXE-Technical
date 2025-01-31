@@ -72,6 +72,12 @@ public:
     /** Logs the details of the executed trade for statistics. */
     void logTrade(TradePtr trade);
 
+    //** Gets total bid volume. */
+    double getTotalBidVolume(); 
+
+    /** Gets total ask volume. */
+    double getTotalAskVolume(); 
+
     /** Returns live level 1 market data. */
     MarketDataPtr getLiveMarketData();
 

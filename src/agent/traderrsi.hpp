@@ -68,23 +68,23 @@ public:
             double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
             std::cout << "RSI: " << rsi << "\n";
 
-            if (use_stoch_rsi_) {
+            if (use_stoch_rsi_) { // If using Stochastic RSI is activated (true) 
                 // Store RSI values for Stochastic RSI calculation
                 rsi_values_.push_back(rsi);
 
-                if (rsi_values_.size() > stoch_lookback_) { 
-                    rsi_values_.erase(rsi_values_.begin());   
+                if (rsi_values_.size() > stoch_lookback_) {  // If more RSI values than length of Stochastic RSI lookback
+                    rsi_values_.erase(rsi_values_.begin());  // If buffer exceeds lookback, remove the oldest price 
                 }
 
                 // Calculate Stochastic RSI 
-                double stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_); 
+                double stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_); // Calculate Stochastic RSI value based on previously calculated RSI values, Stochastic lookback length and smoothing factor 
                 std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
 
-                if (trader_side_ == Order::Side::BID && stoch_rsi < 20) {
+                if (trader_side_ == Order::Side::BID && stoch_rsi < 20) { // If Stochastic RSI is less than 20 then buy signal generated (oversold) 
                     std::cout << "Oversold detected, placing BID order\n";
                     placeOrder(Order::Side::BID); // Oversold condition
                 } 
-                else if (trader_side_ == Order::Side::ASK && stoch_rsi > 80) {
+                else if (trader_side_ == Order::Side::ASK && stoch_rsi > 80) { // If Stochastic RSI is more than 80 then sell signal generated (overbought) 
                     std::cout << "Overbought detected, placing ASK order\n";
                     placeOrder(Order::Side::ASK); // Overbought condition
                 }
@@ -193,7 +193,7 @@ private:
             }
         }
         
-        if (upsum + dnsm < 1e-6) {
+        if (upsum + dnsm < 1e-6) { // Prevents divison by 0 when calculating RSI by returning neutral value (50) if sum of upward and downward price movement is extremely small (less than 1e-6)
            return 50.0;
         } 
 
@@ -247,36 +247,36 @@ private:
     {
         size_t n = rsi_values.size();
 
-        if (n < stoch_lookback) {
-            return 50.0; // Handle small buffer with neutral 50 RSI value
+        if (n < stoch_lookback) { // If no. of RSI values is less than required stochastic RSI lookback length; avoids error when not enough data 
+            return 50.0; // Handle small buffer with neutral 50 RSI value (neutral)
         }
 
-        std::vector<double> stoch_rsi_values(n, 0.0);
+        std::vector<double> stoch_rsi_values(n, 0.0); // Vector of zeros (same size as RSI values) to store computed S.RSI values
 
         // Initialize min and max RSI values for lookback period
-        for (size_t icase = stoch_lookback - 1; icase < n; ++icase) {
-            double min_val = 1e60; // Arbitrary high value
+        for (size_t icase = stoch_lookback - 1; icase < n; ++icase) { // Loop through existing RSI values
+            double min_val = 1e60; // Arbitrary high value; extreme values to store the min. and max. RSI values in the lookback period 
             double max_val = -1e60; // Arbitrary low value
 
             // Inner loop for lookback2 window
-            for (size_t j = icase - stoch_lookback + 1; j <= icase; ++j) {
-                if (rsi_values[j] < min_val) min_val = rsi_values[j];
+            for (size_t j = icase - stoch_lookback + 1; j <= icase; ++j) { // Loop through stochastic lookback RSI values (sliding window) 
+                if (rsi_values[j] < min_val) min_val = rsi_values[j]; // Finds min. and max. RSI within this period 
                 if (rsi_values[j] > max_val) max_val = rsi_values[j];
             }
 
             // Compute Stochastic RSI
-            if (max_val == min_val) {
-                stoch_rsi_values[icase] = 50.0; // Neutral Stoch RSI if no variation
+            if (max_val == min_val) { // If max val == min. val -> no variation -> assign netural RSI value
+                stoch_rsi_values[icase] = 50.0; 
             } else {
-                stoch_rsi_values[icase] = 100.0 * (rsi_values[icase] - min_val) / (max_val - min_val);
+                stoch_rsi_values[icase] = 100.0 * (rsi_values[icase] - min_val) / (max_val - min_val); // Stochastic RSI formula; normalises RSI values between 0 and 100. Closer to 100 -> RSI is at upper range of past values. Closer to 0 -> RSI is at lower range of past values
             }
         }
 
-        // Exponential smoothing if requested
+        // Exponential smoothing (EMA) if requested (reduces noise in stochastic RSI for stability)
         if (n_to_smooth > 1) {
             double alpha = 2.0 / (n_to_smooth + 1.0);
             double smoothed = stoch_rsi_values[stoch_lookback - 1];
-            for (size_t icase = stoch_lookback; icase < n; ++icase) {
+            for (size_t icase = stoch_lookback; icase < n; ++icase) { // Iterate over stochastic RSI values and apply smoothing EMA formula
                 smoothed = alpha * stoch_rsi_values[icase] + (1.0 - alpha) * smoothed;
                 stoch_rsi_values[icase] = smoothed;
             }
