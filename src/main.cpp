@@ -165,8 +165,8 @@ void local_runner(int argc, char** argv)
 
         int lookback = 20; // Example values
         bool use_stoch_rsi = true; // Example values
-        int stoch_lookback = 9; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
-        int n_to_smooth = 2; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
+        int stoch_lookback = 14; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
+        int n_to_smooth = 3; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
 
         std::shared_ptr<TraderRSI> trader (new TraderRSI{&entity, config, lookback, use_stoch_rsi, stoch_lookback, n_to_smooth});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));

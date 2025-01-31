@@ -158,7 +158,8 @@ private:
             return 50.0; // Neutral RSI
         }
 
-        double upsum = 1.e-60, dnsm = 1.e-60; //Avoid division by zero. Upsum = sum of upward price movements (gains). Dnsm = sum of downward price movements (losses)
+        //double upsum = 1.e-60, dnsm = 1.e-60; //Avoid division by zero. Upsum = sum of upward price movements (gains). Dnsm = sum of downward price movements (losses)
+        double upsum = 0.0, dnsm = 0.0;
         size_t initial_calculation_period = std::min(static_cast<size_t>(lookback_), prices.size());
 
         //Initial calculation of upsum and dnsm (lookback period); initial smoothed averages for upward and downward movements over lookback
@@ -183,9 +184,7 @@ private:
             if (diff > 0.0) //If diff > 0.0 its upward price movement
             {
                 upsum = ((lookback_ - 1) * upsum + diff) / lookback_; //Update upsum using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new gain)
-                //upsum = ((lookback_ - 1) * upsum + diff) / lookback_;
                 dnsm *= (lookback_ - 1.0) / lookback_; //Update dnsm using exponential smoothing. Scales down dnsm to reflect new price difference (new gain)
-                //dnsm = ((lookback_ - 1) * dnsm) / lookback_;
             }
             else
             {
@@ -194,7 +193,7 @@ private:
             }
         }
         
-        if (upsum + dnsm == 0.0) {
+        if (upsum + dnsm < 1e-6) {
            return 50.0;
         } 
 
@@ -256,18 +255,11 @@ private:
 
         // Initialize min and max RSI values for lookback period
         for (size_t icase = stoch_lookback - 1; icase < n; ++icase) {
-            double min_val = 1e60;  // Arbitrary high value
-            double max_val = -1e60; // Arbitrary low value
+            //double min_val = 1e60;  // Arbitrary high value
+            //double max_val = -1e60; // Arbitrary low value
 
-            for (int j = 0; j < stoch_lookback; ++j) {
-                double current_rsi = rsi_values[icase - j];
-                if (current_rsi > max_val) {
-                    max_val = current_rsi;
-                }
-                if (current_rsi < min_val) {
-                    min_val = current_rsi;
-                }
-            }
+            double min_val = *std::min_element(rsi_values.begin() + icase - stoch_lookback + 1, rsi_values.begin() + icase + 1);
+            double max_val = *std::max_element(rsi_values.begin() + icase - stoch_lookback + 1, rsi_values.begin() + icase + 1);
 
             // Compute Stochastic RSI
             if (max_val == min_val) {
