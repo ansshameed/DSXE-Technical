@@ -10,7 +10,7 @@ class TraderRSI : public TraderAgent
 {
 public:
 
-    TraderRSI(NetworkEntity *network_entity, TraderConfigPtr config, int lookback)
+    TraderRSI(NetworkEntity *network_entity, TraderConfigPtr config, int lookback, bool use_stoch_rsi, int stoch_lookback, int n_to_smooth)
     : TraderAgent(network_entity, config),
       exchange_{config->exchange_name},
       ticker_{config->ticker},
@@ -18,10 +18,13 @@ public:
       limit_price_{config->limit},
       lookback_{lookback},
       cancelling_{config->cancelling},
-      trade_interval_ms_{config->trade_interval},
+      trade_interval_ms_{config->trade_interval}, 
+      use_stoch_rsi_{use_stoch_rsi}, // Initialise Stochastic RSI
+      stoch_lookback_{stoch_lookback}, // Initialise Stochastic RSI lookback period
+      n_to_smooth_{n_to_smooth}, // Initialise smoothing factor
       random_generator_{std::random_device{}()},
-      mutex_{},
-      profit_margin_{0.0} // Initialise profit margin
+      profit_margin_{0.0}, // Initialise profit margin
+      mutex_{}
     {
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
@@ -59,33 +62,45 @@ public:
             closing_prices_.erase(closing_prices_.begin()); //If buffer exceeds lookback, remove the oldest price
         }
 
-        //std::cout << "Closing prices: ";
-        //for (const auto& price : closing_prices_) {
-            //std::cout << price << " ";
-        //}
-        //std::cout << "\n";
-
         // Calculate RSI (only when no. of closing prices is equal to lookback)
         if (closing_prices_.size() >= lookback_)
         {
-            //for (const auto& price : closing_prices_) {
-                //std::cout << price << " ";
-            //}
-            //std::cout << "\n";
-
             double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
             std::cout << "RSI: " << rsi << "\n";
 
-            // Implement trading logic based on RSI
-            if (trader_side_ == Order::Side::BID && rsi < 30) //If RSI is less than 30, buy signal is generated (oversold)
-            {
-                // Buy signal
-                placeOrder(Order::Side::BID);
-            }
-            else if (trader_side_ == Order::Side::ASK && rsi > 70) //If RSI is greater than 70, sell signal is generated (overbought)
-            {
-                // Sell signal
-                placeOrder(Order::Side::ASK);
+            if (use_stoch_rsi_) {
+                // Store RSI values for Stochastic RSI calculation
+                rsi_values_.push_back(rsi);
+
+                if (rsi_values_.size() > stoch_lookback_) { 
+                    rsi_values_.erase(rsi_values_.begin());   
+                }
+
+                // Calculate Stochastic RSI 
+                double stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_); 
+                std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
+
+                if (trader_side_ == Order::Side::BID && stoch_rsi < 20) {
+                    std::cout << "Oversold detected, placing BID order\n";
+                    placeOrder(Order::Side::BID); // Oversold condition
+                } 
+                else if (trader_side_ == Order::Side::ASK && stoch_rsi > 80) {
+                    std::cout << "Overbought detected, placing ASK order\n";
+                    placeOrder(Order::Side::ASK); // Overbought condition
+                }
+
+            } else {
+                // Implement trading logic based on RSI
+                if (trader_side_ == Order::Side::BID && rsi < 30) //If RSI is less than 30, buy signal is generated (oversold)
+                {
+                    // Buy signal
+                    placeOrder(Order::Side::BID);
+                }
+                else if (trader_side_ == Order::Side::ASK && rsi > 70) //If RSI is greater than 70, sell signal is generated (overbought)
+                {
+                    // Sell signal
+                    placeOrder(Order::Side::ASK);
+                } 
             }
         }
     }
@@ -162,27 +177,29 @@ private:
         //Processes remaining prices sequentially to dynamically update smoothed averages using exponential smoothing
         //RSI continuously updated using exponential smoothing (historical trend via upsum and dnsm and the new prices differences)
         for (size_t i = initial_calculation_period; i < prices.size(); ++i) //Loop through remaining closing prices and update upsum and dnsm (prices after lookback period)
-        {
+        {   
             double diff = prices[i] - prices[i - 1]; //Price difference for each consecutive price pair
             //std::cout << "Processing price: " << prices[i] << ", Previous price: " << prices[i - 1] << ", Difference: " << diff << "\n"; // Print the price difference
             if (diff > 0.0) //If diff > 0.0 its upward price movement
             {
                 upsum = ((lookback_ - 1) * upsum + diff) / lookback_; //Update upsum using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new gain)
+                //upsum = ((lookback_ - 1) * upsum + diff) / lookback_;
                 dnsm *= (lookback_ - 1.0) / lookback_; //Update dnsm using exponential smoothing. Scales down dnsm to reflect new price difference (new gain)
-                std::cout << "updated" << "\n";
+                //dnsm = ((lookback_ - 1) * dnsm) / lookback_;
             }
             else
             {
                 dnsm = ((lookback_ - 1) * dnsm - diff) / lookback_; //Update dnsm using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new loss)
                 upsum *= (lookback_ - 1.0) / lookback_; //Update upsum using exponential smoothing. Scales down upsum to reflect new price difference (new loss)
-                std::cout << "updated" << "\n"; // Print updated averages for loss
             }
         }
-        if (upsum + dnsm <= 0.0) {
-            return 50.0;
+        
+        if (upsum + dnsm == 0.0) {
+           return 50.0;
         } 
 
-        return 100.0 * upsum / (upsum + dnsm); //Calculate RSI; normalises ratio of avg. gains (upsum) to total movement (upsum + dnsm) to 0-100 scale. RSI < 30: oversold, RSI > 70: overbought
+        double rsi = 100.0 * (upsum / (upsum + dnsm)); // Calculate RSI; normalises ratio of avg. gains (upsum) to total movement (upsum + dnsm) to 0-100 scale. RSI < 30: oversold, RSI > 70: overbought
+        return rsi; 
     }
 
     void placeOrder(Order::Side side) //Places limit order on exchange 
@@ -192,7 +209,7 @@ private:
         //std::chrono::steady_clock::time_point last_trade_time_; PRIVATE VARIABLE 
         //unsigned int cooldown_duration_ms_ = 5000; // Cooldown period in milliseconds (e.g., 5 seconds) PRIVATE VARIABLE 
         //auto now = std::chrono::steady_clock::now();
-        //if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_trade_time_).count() < cooldown_duration_ms_)
+        //if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_trade_time_.count() < cooldown_duration_ms_)
         //{
             //std::cout << "Skipping trade due to cooldown period." << std::endl;
             //return; // Exit function if still in cooldown
@@ -227,6 +244,52 @@ private:
         return price; //Return adjusted price for limit order
     }
 
+    double calculateStochRSI(const std::vector<double>& rsi_values, int stoch_lookback, int n_to_smooth)
+    {
+        size_t n = rsi_values.size();
+
+        if (n < stoch_lookback) {
+            return 50.0; // Handle small buffer with neutral 50 RSI value
+        }
+
+        std::vector<double> stoch_rsi_values(n, 0.0);
+
+        // Initialize min and max RSI values for lookback period
+        for (size_t icase = stoch_lookback - 1; icase < n; ++icase) {
+            double min_val = 1e60;  // Arbitrary high value
+            double max_val = -1e60; // Arbitrary low value
+
+            for (int j = 0; j < stoch_lookback; ++j) {
+                double current_rsi = rsi_values[icase - j];
+                if (current_rsi > max_val) {
+                    max_val = current_rsi;
+                }
+                if (current_rsi < min_val) {
+                    min_val = current_rsi;
+                }
+            }
+
+            // Compute Stochastic RSI
+            if (max_val == min_val) {
+                stoch_rsi_values[icase] = 50.0; // Neutral Stoch RSI if no variation
+            } else {
+                stoch_rsi_values[icase] = 100.0 * (rsi_values[icase] - min_val) / (max_val - min_val);
+            }
+        }
+
+        // Exponential smoothing if requested
+        if (n_to_smooth > 1) {
+            double alpha = 2.0 / (n_to_smooth + 1.0);
+            double smoothed = stoch_rsi_values[stoch_lookback - 1];
+            for (size_t icase = stoch_lookback; icase < n; ++icase) {
+                smoothed = alpha * stoch_rsi_values[icase] + (1.0 - alpha) * smoothed;
+                stoch_rsi_values[icase] = smoothed;
+            }
+        }
+
+        return stoch_rsi_values.back(); // Return the latest Stochastic RSI value
+    }
+
     std::string exchange_;
     std::string ticker_;
     Order::Side trader_side_;
@@ -235,6 +298,7 @@ private:
     bool cancelling_;
     unsigned int trade_interval_ms_;
     std::vector<double> closing_prices_;
+    std::vector<double> rsi_values_; // Store RSI values for Stochastic RSI calculation
 
     std::optional<int> last_accepted_order_id_ = std::nullopt;
 
@@ -246,6 +310,10 @@ private:
 
     double profit_margin_; 
     constexpr static double REL_JITTER = 0.25;
+
+    bool use_stoch_rsi_; 
+    int stoch_lookback_; 
+    int n_to_smooth_; 
 };
 
 #endif

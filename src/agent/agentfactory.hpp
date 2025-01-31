@@ -53,8 +53,12 @@ public:
             }
             case AgentType::TRADER_RSI:
             {
-                int lookback = 14; // Default lookback period for RSI
-                std::shared_ptr<Agent> agent (new TraderRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback});
+                int lookback = 20; // Default lookback period for RSI
+                bool use_stoch_rsi = true; // Example values
+                int stoch_lookback = 9; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
+                int n_to_smooth = 2; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
+
+                std::shared_ptr<Agent> agent (new TraderRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback, use_stoch_rsi, stoch_lookback, n_to_smooth});
                 return agent;
             }
             case AgentType::TRADER_MACD:
