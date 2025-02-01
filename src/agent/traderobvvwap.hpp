@@ -75,7 +75,7 @@ public:
         // Calculate VWAP
         double rolling_vwap = calculateVWAP(price_volume_data_);
         std::cout << "Rolling VWAP: " << rolling_vwap << "\n";
-        
+
         // Calculate OBV Delta
         auto delta_obv = calculateDeltaOBV(close_prices_, volumes_, lookback_obv_, delta_length_);
         if (delta_obv.empty())

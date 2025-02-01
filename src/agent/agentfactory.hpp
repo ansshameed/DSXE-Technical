@@ -107,10 +107,10 @@ public:
             }
             case AgentType::TRADER_OBV_VWAP: 
             { 
-                int lookback_vwap = 14; // Default lookback period for VWAP
-                int lookback_obv = 14; // Default lookback period for OBV
-                int delta_length = 4; // Default delta length for OBV Delta
-                double threshold = 10; // Default threshold for OBV Delta (5-10% of average total volume) 
+                int lookback_vwap = 15; // Default lookback period for VWAP
+                int lookback_obv = 12; // Default lookback period for OBV
+                int delta_length = 5; // Default delta length for OBV Delta
+                double threshold = 5; // Default threshold for OBV Delta (5-10% of average total volume) 
                 std::shared_ptr<Agent> agent (new TraderVWAPOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_vwap, lookback_obv, delta_length, threshold});
                 return agent;
             }

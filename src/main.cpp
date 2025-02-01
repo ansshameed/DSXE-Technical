@@ -292,10 +292,10 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_vwap = 14; // Example value
-        int lookback_obv = 14; // Example value
-        int delta_length = 4; // Example values
-        double threshold = 10; // Example values
+        int lookback_vwap = 15; // Example value
+        int lookback_obv = 12; // Example value
+        int delta_length = 5; // Example values
+        double threshold = 5; // Example values
 
         std::shared_ptr<TraderVWAPOBVDelta> trader (new TraderVWAPOBVDelta{&entity, config, lookback_vwap, lookback_obv, delta_length, threshold});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
