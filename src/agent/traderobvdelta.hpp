@@ -66,9 +66,14 @@ public:
             return;
         }
 
-        if (volumes_.empty() || volumes_.back() == 0) { // If no volume in the last tick, log error and return. Order not placed
-            std::cerr << "Skipping order: No volume in this tick." << std::endl;
-            return;
+        if (volumes_.empty()) { // Skip order when no volume 
+        std::cerr << "Skipping order: No volume data available." << std::endl;
+        return;
+        }
+
+        if (volumes_.back() == 0 && volumes_.size() > 1) { // If volume == 0 then use last non-zero volume 
+            std::cerr << "Using last nonzero volume: " << volumes_[volumes_.size() - 2] << "\n";
+            volumes_.back() = volumes_[volumes_.size() - 2]; // Use last valid volume
         }
 
         //delta = Change in OBV over specified period (delta_length)
