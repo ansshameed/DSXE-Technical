@@ -16,6 +16,7 @@
 #include "traderbb.hpp"
 #include "tradervwap.hpp"
 #include "traderrsibb.hpp"
+#include "traderobvvwap.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -104,6 +105,15 @@ public:
                 std::shared_ptr<Agent> agent (new TraderBBRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_bb, lookback_rsi, std_dev_multiplier});
                 return agent;
             }
+            case AgentType::TRADER_OBV_VWAP: 
+            { 
+                int lookback_vwap = 14; // Default lookback period for VWAP
+                int lookback_obv = 14; // Default lookback period for OBV
+                int delta_length = 4; // Default delta length for OBV Delta
+                double threshold = 10; // Default threshold for OBV Delta (5-10% of average total volume) 
+                std::shared_ptr<Agent> agent (new TraderVWAPOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_vwap, lookback_obv, delta_length, threshold});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -141,6 +151,7 @@ private:
         {std::string{"bb"}, AgentType::TRADER_BOLLINGER_BANDS},
         {std::string{"vwap"}, AgentType::TRADER_VWAP},
         {std::string{"rsibb"}, AgentType::TRADER_RSI_BB},
+        {std::string{"obvvwap"}, AgentType::TRADER_OBV_VWAP},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 

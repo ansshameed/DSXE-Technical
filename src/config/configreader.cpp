@@ -136,6 +136,14 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         {
             return configureTrader(id, xml_node, addr, exchange_addrs, type);
         }
+        case AgentType::TRADER_RSI_BB:
+        {
+            return configureTrader(id, xml_node, addr, exchange_addrs, type);
+        }
+        case AgentType::TRADER_OBV_VWAP:
+        {
+            return configureTrader(id, xml_node, addr, exchange_addrs, type);
+        }
         case AgentType::ARBITRAGE_TRADER:
         {
             return configureArbitrageur(id, xml_node, addr, exchange_addrs);
@@ -143,10 +151,6 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         case AgentType::MARKET_WATCHER:
         {
             return configureMarketWatcher(id, xml_node, addr, exchange_addrs);
-        }
-        case AgentType::TRADER_RSI_BB:
-        {
-            return configureTrader(id, xml_node, addr, exchange_addrs, type);
         }
         default:
         {

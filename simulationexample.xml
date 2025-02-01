@@ -17,9 +17,9 @@
             <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="2"/>
         </exchanges>
         <traders>
-            <rsibb exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>
+            <obvvwap exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>
             <zic exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>
-            <rsibb exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
+            <obvvwap exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
             <zic exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
         </traders>
         <watchers> 

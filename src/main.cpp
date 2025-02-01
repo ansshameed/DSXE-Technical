@@ -22,6 +22,7 @@
 #include "agent/traderbb.hpp"
 #include "agent/tradervwap.hpp"
 #include "agent/traderrsibb.hpp"
+#include "agent/traderobvvwap.hpp" 
 #include "agent/arbitragetrader.hpp"
 #include "agent/orchestratoragent.hpp"
 
@@ -61,6 +62,7 @@ std::string showLocalUsage() {
     ss << "  " << "bb" << "\t\t" << "bollinger bands trader" << "\n";
     ss << "  " << "vwap" << "\t" << "volume-weighted average price" << "\n";
     ss << "  " << "rsibb" << "\t\t" << " relative strength indicator bollinger bands trader" << "\n";
+    ss << "  " << "obvvwap" << "\t" << "on balance volume volume-weighted average price trader" << "\n\n";
     ss << "\n";
     return ss.str();
 }
@@ -275,6 +277,27 @@ void local_runner(int argc, char** argv)
         double std_dev_multiplier = 1.5; // Example value
 
         std::shared_ptr<TraderBBRSI> trader (new TraderBBRSI{&entity, config, lookback_bb, lookback_rsi, std_dev_multiplier});
+        entity.setAgent(std::static_pointer_cast<Agent>(trader));
+        entity.start();
+    }
+    else if (agent_type == "obvvwap") 
+    { 
+        // Create configuration
+        TraderConfigPtr config = std::make_shared<TraderConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+        config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+        config->limit = vm["limit"].as<double>();
+        config->delay = vm["delay"].as<unsigned int>();
+
+        int lookback_vwap = 14; // Example value
+        int lookback_obv = 14; // Example value
+        int delta_length = 4; // Example values
+        double threshold = 10; // Example values
+
+        std::shared_ptr<TraderVWAPOBVDelta> trader (new TraderVWAPOBVDelta{&entity, config, lookback_vwap, lookback_obv, delta_length, threshold});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
     }
