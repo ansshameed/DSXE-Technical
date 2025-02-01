@@ -13,6 +13,7 @@
 #include "traderrsi.hpp"
 #include "tradermacd.hpp"
 #include "traderobvdelta.hpp"
+#include "traderbb.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -80,6 +81,13 @@ public:
                 std::shared_ptr<Agent> agent (new TraderOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, delta_length, threshold});
                 return agent;
             }
+            case AgentType::TRADER_BOLLINGER_BANDS: 
+            {   
+                int lookback_period = 14; 
+                double std_dev_multiplier = 2.0; // Default standard deviation multiplier for Bollinger Bands
+                std::shared_ptr<Agent> agent (new TraderBollingerBands{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, std_dev_multiplier});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -114,6 +122,7 @@ private:
         {std::string{"rsi"}, AgentType::TRADER_RSI},
         {std::string{"macd"}, AgentType::TRADER_MACD},
         {std::string{"obvd"}, AgentType::TRADER_OBV_DELTA},
+        {std::string{"bb"}, AgentType::TRADER_BOLLINGER_BANDS},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 
