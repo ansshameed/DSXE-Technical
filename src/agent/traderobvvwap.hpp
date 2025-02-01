@@ -53,46 +53,48 @@ public:
         std::cout << "Received market data from " << exchange << "\n";
         std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
 
-        double closing_price = msg->data->last_price_traded;
-        double volume = msg->data->volume_per_tick;
+        double closing_price = msg->data->last_price_traded; // Closing price is the last price traded
+        double volume = msg->data->volume_per_tick; // Volume is the last quantity traded
 
         // Store the most recent prices & volumes for VWAP and OBV Delta calculation
-        price_volume_data_.emplace_back(closing_price, volume);
-        close_prices_.push_back(closing_price);
-        volumes_.push_back(volume);
+        price_volume_data_.emplace_back(closing_price, volume); // Store the most recent prices & volumes for rolling VWAP calculation
+        close_prices_.push_back(closing_price); // Store the most recent closing prices for OBV Delta calculation
+        volumes_.push_back(volume); // Store the most recent volumes for OBV Delta calculation
 
-        if (price_volume_data_.size() > lookback_vwap_)
+        if (price_volume_data_.size() > lookback_vwap_) // If the lookback period is exceeded, remove the oldest price-volume data
         {
             price_volume_data_.erase(price_volume_data_.begin());
         }
-
-        if (close_prices_.size() > lookback_obv_)
+ 
+        if (close_prices_.size() > lookback_obv_) // If the lookback period is exceeded, remove the oldest closing price and volume
         {
             close_prices_.erase(close_prices_.begin());
             volumes_.erase(volumes_.begin());
         }
 
         // Calculate VWAP
-        double rolling_vwap = calculateVWAP(price_volume_data_);
+        double rolling_vwap = calculateVWAP(price_volume_data_); // Calculate the VWAP using the price-volume data (rolling VWAP window)
         std::cout << "Rolling VWAP: " << rolling_vwap << "\n";
 
         // Calculate OBV Delta
-        auto delta_obv = calculateDeltaOBV(close_prices_, volumes_, lookback_obv_, delta_length_);
-        if (delta_obv.empty())
+        auto delta_obv = calculateDeltaOBV(close_prices_, volumes_, lookback_obv_, delta_length_); // Calculate the OBV Delta using the closing prices and volumes
+
+        if (delta_obv.empty()) // If OBV Delta is empty, return
         {
             std::cerr << "ERROR: delta_obv is empty!" << std::endl;
             return;
         }
-        double latest_delta_obv = delta_obv.back();
+
+        double latest_delta_obv = delta_obv.back(); // Get the most recent OBV Delta value
         std::cout << "Latest Delta OBV: " << latest_delta_obv << "\n";
 
         // Implement trading logic based on VWAP and OBV Delta
-        if (trader_side_ == Order::Side::BID && closing_price < rolling_vwap && latest_delta_obv > threshold_)
+        if (trader_side_ == Order::Side::BID && closing_price < rolling_vwap && latest_delta_obv > threshold_) // If trader is BID and price is below VWAP and Delta OBV above threshold, place BID order
         {
             std::cout << "Price below VWAP and Delta OBV > threshold, placing BID order\n";
             placeOrder(Order::Side::BID, rolling_vwap);
         }
-        else if (trader_side_ == Order::Side::ASK && closing_price > rolling_vwap && latest_delta_obv < -threshold_)
+        else if (trader_side_ == Order::Side::ASK && closing_price > rolling_vwap && latest_delta_obv < -threshold_) // If trader is ASK and price is above VWAP and Delta OBV below negative threshold, place ASK order
         {
             std::cout << "Price above VWAP and Delta OBV < -threshold, placing ASK order\n";
             placeOrder(Order::Side::ASK, rolling_vwap);
@@ -143,13 +145,13 @@ private:
         double price_volume_sum = 0.0;
         double volume_sum = 0.0;
 
-        for (const auto& [price, volume] : data)
+        for (const auto& [price, volume] : data) // For each price-volume pair in the data
         {
-            price_volume_sum += price * volume;
-            volume_sum += volume;
+            price_volume_sum += price * volume; // Calculate the sum of price * volume
+            volume_sum += volume; // Calculate the sum of volume
         }
 
-        return volume_sum > 0 ? price_volume_sum / volume_sum : 0.0;
+        return volume_sum > 0 ? price_volume_sum / volume_sum : 0.0; // Calculate the VWAP
     }
 
     std::vector<double> calculateDeltaOBV(const std::vector<double>& close_prices, 
@@ -157,64 +159,65 @@ private:
                                           int lookback_length, 
                                           int delta_length)
     {   
+
         size_t n = close_prices.size();
-        if (n < lookback_length || volumes.size() < lookback_length) {
+        if (n < lookback_length || volumes.size() < lookback_length) { // If no. of prices or volume ticks less than lookback length then throw exception
             throw std::invalid_argument("Insufficient data for the given lookback length.");
         }
 
-        std::vector<double> output(n, 0.0);
-        size_t front_bad = lookback_length;
+        std::vector<double> output(n, 0.0); // Create vector of zeros with size n (no. of closing prices)
+        size_t front_bad = lookback_length; // Set front_bad to lookback length
 
-        for (size_t first_volume = 0; first_volume < n; first_volume++) {
-            if (volumes[first_volume] > 0) {
+        for (size_t first_volume = 0; first_volume < n; first_volume++) { // Loop through closing prices
+            if (volumes[first_volume] > 0) { // If volume is greater than zero, break
                 break;
             }
-            front_bad = std::min(front_bad, n - 1);
+            front_bad = std::min(front_bad, n - 1); // If volume is zero, set front_bad to n - 1 (last index); OBV computation will be skipped
         }
 
-        for (size_t i = 0; i < front_bad; i++) {
+        for (size_t i = 0; i < front_bad; i++) { // Set all values before front_bad to 0.0
             output[i] = 0.0;
         }
 
-        for (size_t icase = front_bad; icase < n; icase++) {
+        for (size_t icase = front_bad; icase < n; icase++) { // Loop through closing prices
             double signed_volume = 0.0;
             double total_volume = 0.0;
 
-            for (size_t i = 1; i < lookback_length && (icase - i) > 0; i++) {
+            for (size_t i = 1; i < lookback_length && (icase - i) > 0; i++) { // Loop backwards for lookback_length periods
                 if (icase - i - 1 < 0) {
                     std::cerr << "ERROR: Out-of-bounds access prevented (icase - i - 1)" << std::endl;
                     break;
                 }
 
-                if (close_prices[icase - i] > close_prices[icase - i - 1]) {
+                if (close_prices[icase - i] > close_prices[icase - i - 1]) { // If closing price is greater than previous closing price, add volume to signed volume
                     signed_volume += volumes[icase - i];
-                } else if (close_prices[icase - i] < close_prices[icase - i - 1]) {
+                } else if (close_prices[icase - i] < close_prices[icase - i - 1]) { // If price decreased then subtract the volume
                     signed_volume -= volumes[icase - i];
                 }
-                total_volume += volumes[icase - i];
+                total_volume += volumes[icase - i]; // Add volume to total volume
             }
 
-            if (total_volume <= 0.0) {
+            if (total_volume <= 0.0) { // If total volume is zero or negative, set output to 0.0
                 output[icase] = 0.0;
                 continue;
             }
 
-            double value = signed_volume / total_volume;
-            double normalized_value = 100.0 * std::erfc(-0.6 * value * sqrt(static_cast<double>(lookback_length))) - 50.0;
-            output[icase] = normalized_value;
+            double value = signed_volume / total_volume; // Calculate OBV ratio
+            double normalized_value = 100.0 * std::erfc(-0.6 * value * sqrt(static_cast<double>(lookback_length))) - 50.0; // Normalise OBV value to 0-100 scale
+            output[icase] = normalized_value; // Store the normalised OBV value
         }
 
-        if (n < front_bad + delta_length) {
+        if (n < front_bad + delta_length) { // If no. of closing prices less than front_bad + delta_length then log error and return
             std::cerr << "ERROR: Not enough data for delta calculation!" << std::endl;
             return output;
         }
-
-        for (int icase = static_cast<int>(n) - 1; icase >= static_cast<int>(front_bad + delta_length); icase--) {
+ 
+        for (int icase = static_cast<int>(n) - 1; icase >= static_cast<int>(front_bad + delta_length); icase--) { // Loop backwards from last index to front_bad + delta_length to compute OBV delta over delta_length
             if (icase - delta_length < 0) {
                 std::cerr << "ERROR: Out-of-bounds access prevented (icase - delta_length)\n";
                 break;
             }
-            output[icase] -= output[icase - delta_length];
+            output[icase] -= output[icase - delta_length]; // Subtract OBV value from delta length preiods ago to compute OBV change
         }
 
         return output;
@@ -230,8 +233,8 @@ private:
 
         int quantity = getRandomOrderSize();
 
-        double price_adjustment = 0.001 * vwap_price;
-        double price = (side == Order::Side::BID) ? (vwap_price + price_adjustment)
+        double price_adjustment = 0.001 * vwap_price; // 0.1% price adjustment for slippage
+        double price = (side == Order::Side::BID) ? (vwap_price + price_adjustment) // If BID then increase price slightly, else decrease price slightly (ASK)
                                                   : (vwap_price - price_adjustment);
 
         placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_);
