@@ -14,6 +14,7 @@
 #include "tradermacd.hpp"
 #include "traderobvdelta.hpp"
 #include "traderbb.hpp"
+#include "tradervwap.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -88,6 +89,12 @@ public:
                 std::shared_ptr<Agent> agent (new TraderBollingerBands{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, std_dev_multiplier});
                 return agent;
             }
+            case AgentType::TRADER_VWAP: 
+            { 
+                int lookback_period = 14; // Default lookback period for VWAP
+                std::shared_ptr<Agent> agent (new TraderVWAP{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -123,6 +130,7 @@ private:
         {std::string{"macd"}, AgentType::TRADER_MACD},
         {std::string{"obvd"}, AgentType::TRADER_OBV_DELTA},
         {std::string{"bb"}, AgentType::TRADER_BOLLINGER_BANDS},
+        {std::string{"vwap"}, AgentType::TRADER_VWAP},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 

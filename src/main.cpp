@@ -20,6 +20,7 @@
 #include "agent/traderobvdelta.hpp"
 #include "agent/traderzip.hpp"
 #include "agent/traderbb.hpp"
+#include "agent/tradervwap.hpp"
 #include "agent/arbitragetrader.hpp"
 #include "agent/orchestratoragent.hpp"
 
@@ -57,6 +58,7 @@ std::string showLocalUsage() {
     ss << "  " << "macd" << "\t" << "moving average convergence divergence trader" << "\n";
     ss << "  " << "obv" << "\t\t" << "on balance volume delta trader" << "\n";
     ss << "  " << "bb" << "\t\t" << "bollinger bands trader" << "\n";
+    ss << "  " << "vwap" << "\t" << "volume-weighted average price" << "\n";
     ss << "\n";
     return ss.str();
 }
@@ -235,7 +237,25 @@ void local_runner(int argc, char** argv)
         std::shared_ptr<TraderBollingerBands> trader (new TraderBollingerBands{&entity, config, lookback_period, std_dev_multiplier});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
-    } 
+    }
+    else if (agent_type == "vwap")
+    { 
+        // Create configuration
+        TraderConfigPtr config = std::make_shared<TraderConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+        config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+        config->limit = vm["limit"].as<double>();
+        config->delay = vm["delay"].as<unsigned int>();
+
+        int lookback_period = 14; // Example value
+
+        std::shared_ptr<TraderVWAP> trader (new TraderVWAP{&entity, config, lookback_period});
+        entity.setAgent(std::static_pointer_cast<Agent>(trader));
+        entity.start();
+    }
     else {
         std::cerr << "Invalid agent type: " << agent_type << "\n";
         std::cout << "\n" << showLocalUsage() << desc << std::endl;
