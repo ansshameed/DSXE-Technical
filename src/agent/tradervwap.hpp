@@ -108,7 +108,6 @@ private:
 
     void sleep()
     {
-        // Randomized delay to avoid detection & pattern matching
         std::uniform_real_distribution<> dist(-REL_JITTER, REL_JITTER);
         unsigned long jitter = dist(random_generator_);
         unsigned long sleep_time_ms = std::round(trade_interval_ms_ * (1.0 + jitter));
