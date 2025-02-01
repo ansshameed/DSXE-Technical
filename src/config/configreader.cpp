@@ -144,6 +144,10 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         {
             return configureMarketWatcher(id, xml_node, addr, exchange_addrs);
         }
+        case AgentType::TRADER_RSI_BB:
+        {
+            return configureTrader(id, xml_node, addr, exchange_addrs, type);
+        }
         default:
         {
             throw std::runtime_error("Unknown XML tag in configuration file");

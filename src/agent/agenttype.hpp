@@ -13,6 +13,7 @@ enum class AgentType : int
     TRADER_OBV_DELTA, // On Balance Volume Delta
     TRADER_BOLLINGER_BANDS, // Bollinger Bands
     TRADER_VWAP, // Volume Weighted Average Price
+    TRADER_RSI_BB, // RSI and Bollinger Bands
     ARBITRAGE_TRADER    
 };
 
@@ -29,6 +30,7 @@ inline std::string to_string(AgentType agent_type)
         case AgentType::TRADER_OBV_DELTA: return std::string{"TraderOBVDelta"};
         case AgentType::TRADER_BOLLINGER_BANDS: return std::string{"TraderBollingerBands"};
         case AgentType::TRADER_VWAP: return std::string{"TraderVWAP"};
+        case AgentType::TRADER_RSI_BB: return std::string{"TraderBBRSI"};
         case AgentType::ARBITRAGE_TRADER: return std::string{"ArbitrageTrader"};
         default: return std::string{""};
     }

@@ -21,6 +21,7 @@
 #include "agent/traderzip.hpp"
 #include "agent/traderbb.hpp"
 #include "agent/tradervwap.hpp"
+#include "agent/traderrsibb.hpp"
 #include "agent/arbitragetrader.hpp"
 #include "agent/orchestratoragent.hpp"
 
@@ -59,6 +60,7 @@ std::string showLocalUsage() {
     ss << "  " << "obv" << "\t\t" << "on balance volume delta trader" << "\n";
     ss << "  " << "bb" << "\t\t" << "bollinger bands trader" << "\n";
     ss << "  " << "vwap" << "\t" << "volume-weighted average price" << "\n";
+    ss << "  " << "rsibb" << "\t\t" << " relative strength indicator bollinger bands trader" << "\n";
     ss << "\n";
     return ss.str();
 }
@@ -168,7 +170,7 @@ void local_runner(int argc, char** argv)
         config->delay = vm["delay"].as<unsigned int>();
 
         int lookback = 20; // Example values
-        bool use_stoch_rsi = true; // Example values
+        bool use_stoch_rsi = false; // Example values
         int stoch_lookback = 16; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
         int n_to_smooth = 2; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
 
@@ -253,6 +255,26 @@ void local_runner(int argc, char** argv)
         int lookback_period = 14; // Example value
 
         std::shared_ptr<TraderVWAP> trader (new TraderVWAP{&entity, config, lookback_period});
+        entity.setAgent(std::static_pointer_cast<Agent>(trader));
+        entity.start();
+    }
+    else if (agent_type == "rsibb") 
+    { 
+        //Create configuration
+        TraderConfigPtr config = std::make_shared<TraderConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+        config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+        config->limit = vm["limit"].as<double>();
+        config->delay = vm["delay"].as<unsigned int>();
+
+        int lookback_bb = 14; // Example values
+        int lookback_rsi = 14; // Example values
+        double std_dev_multiplier = 1.5; // Example value
+
+        std::shared_ptr<TraderBBRSI> trader (new TraderBBRSI{&entity, config, lookback_bb, lookback_rsi, std_dev_multiplier});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
     }

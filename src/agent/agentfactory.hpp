@@ -15,6 +15,7 @@
 #include "traderobvdelta.hpp"
 #include "traderbb.hpp"
 #include "tradervwap.hpp"
+#include "traderrsibb.hpp"
 #include "arbitragetrader.hpp"
 
 class AgentFactory
@@ -56,7 +57,7 @@ public:
             case AgentType::TRADER_RSI:
             {
                 int lookback = 20; // Default lookback period for RSI
-                bool use_stoch_rsi = true; // Example values
+                bool use_stoch_rsi = false; // Example values
                 int stoch_lookback = 16; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
                 int n_to_smooth = 2; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
 
@@ -95,6 +96,14 @@ public:
                 std::shared_ptr<Agent> agent (new TraderVWAP{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period});
                 return agent;
             }
+            case AgentType::TRADER_RSI_BB: 
+            { 
+                int lookback_bb = 14; // Default lookback period for Bollinger Bands
+                int lookback_rsi = 20; // Default lookback period for RSI
+                double std_dev_multiplier = 2.0; // Default standard deviation multiplier for Bollinger Bands
+                std::shared_ptr<Agent> agent (new TraderBBRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_bb, lookback_rsi, std_dev_multiplier});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -131,6 +140,7 @@ private:
         {std::string{"obvd"}, AgentType::TRADER_OBV_DELTA},
         {std::string{"bb"}, AgentType::TRADER_BOLLINGER_BANDS},
         {std::string{"vwap"}, AgentType::TRADER_VWAP},
+        {std::string{"rsibb"}, AgentType::TRADER_RSI_BB},
         {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
     };
 
