@@ -72,7 +72,7 @@ void OrderBook::updateOrderWithTrade(OrderPtr order, TradePtr trade)
     }
 }
 
-std::optional<LimitOrderPtr> OrderBook::bestBid()
+std::optional<LimitOrderPtr> OrderBook::bestBid() 
 {
     if (bids_.empty())
     {
@@ -94,7 +94,7 @@ int OrderBook::bestBidSize()
     }
 }
 
-std::optional<LimitOrderPtr> OrderBook::bestAsk()
+std::optional<LimitOrderPtr> OrderBook::bestAsk() 
 {
     if (asks_.empty())
     {
@@ -199,6 +199,38 @@ double OrderBook::getTotalAskVolume()
     return asks_volume_;
 }
 
+// Mid Price = Average of best bid price and best ask price in the LOB snapshot of the current time
+double OrderBook::calculateMidPrice()  
+{ 
+    auto best_bid = bestBid();
+    auto best_ask = bestAsk();
+
+    if (!best_bid.has_value() || !best_ask.has_value()) // If there are no bids or asks in the order book
+    {
+        return -1;
+    }
+
+    return (best_bid.value()->price + best_ask.value()->price) / 2; // Calculate mid price as average of best bid and best ask prices
+} 
+
+// Micro Price = Weighted average of best bid and best ask prices in the LOB snapshot of the current time
+double OrderBook::calculateMicroPrice() 
+{ 
+    auto best_bid = bestBid(); 
+    auto best_ask = bestAsk(); 
+
+    if (!best_bid.has_value() || !best_ask.has_value() || bestBidSize() == 0 || bestAskSize() == 0) // If there are no bids or asks in the order book or the size of the best bid or best ask is zero
+    {
+        return -1; 
+    }
+    
+    double best_bid_price = best_bid.value()->price;
+    double best_ask_price = best_ask.value()->price;
+    int best_bid_size = bestBidSize();
+    int best_ask_size = bestAskSize(); 
+
+    return (best_bid_price * best_ask_size + best_ask_price * best_bid_size) / (best_bid_size + best_ask_size); // Calculate micro price as weighted average of best bid and best ask prices
+}
 
 MarketDataPtr OrderBook::getLiveMarketData()
 {
@@ -233,5 +265,10 @@ MarketDataPtr OrderBook::getLiveMarketData()
     data->trades_count = trade_count_;
 
     data->timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+
+    // Additionals for DT 
+    data->mid_price = calculateMidPrice();
+    data->micro_price = calculateMicroPrice();
+  
     return data;
 } 

@@ -81,11 +81,18 @@ public:
     /** Returns live level 1 market data. */
     MarketDataPtr getLiveMarketData();
 
+    /** Calculates mid price.  */
+    double calculateMidPrice();
+
+    //** Calculates micro price. */
+    double calculateMicroPrice();
+
     /** Creates a new order book for the given ticker. */
     static OrderBookPtr create(std::string_view ticker)
     {
         return std::make_shared<OrderBook>(ticker);
     }
+
 
 private:
     void updateRollingWindow(double high_price, double low_price);
