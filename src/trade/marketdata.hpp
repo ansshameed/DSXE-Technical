@@ -43,12 +43,12 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
 
         std::string describeCSVHeaders() const override
         {
-            return "timestamp,ticker,best_bid,best_ask,best_bid_size,best_ask_size,bids_volume,asks_volume,bids_count,asks_count,mid_price,micro_price";
+            return "timestamp,ticker,best_bid,best_ask,best_bid_size,best_ask_size,bids_volume,asks_volume,bids_count,asks_count"; // CSV headers for the Market Data
         }
 
         std::string toCSV() const override
         {
-            return std::to_string(timestamp) + "," + ticker + "," + std::to_string(best_bid) + "," + std::to_string(best_ask) + "," + std::to_string(best_bid_size) + "," + std::to_string(best_ask_size) + "," + std::to_string(bids_volume) + "," + std::to_string(asks_volume) + "," + std::to_string(bids_count) + "," + std::to_string(asks_count) + "," + std::to_string(mid_price) + "," + std::to_string(micro_price);
+            return std::to_string(timestamp) + "," + ticker + "," + std::to_string(best_bid) + "," + std::to_string(best_ask) + "," + std::to_string(best_bid_size) + "," + std::to_string(best_ask_size) + "," + std::to_string(bids_volume) + "," + std::to_string(asks_volume) + "," + std::to_string(bids_count) + "," + std::to_string(asks_count); 
         }
 
     private:
@@ -65,9 +65,7 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
             << "VOLUME TRADED: " << data.cumulative_volume_traded << "\n"
             << "HIGH: " << data.high_price << "\n"
             << "LOW: " << data.low_price << "\n"
-            << "TRADES: " << data.trades_count << "\n"
-            << "MID PRICE: " << data.mid_price << "\n"
-            << "MICRO PRICE: " << data.micro_price << "\n";
+            << "TRADES: " << data.trades_count << "\n"; 
             return os;
         }
 
