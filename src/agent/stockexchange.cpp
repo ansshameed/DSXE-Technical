@@ -3,6 +3,7 @@
 
 #include "stockexchange.hpp"
 #include "../utilities/syncqueue.hpp"
+#include "../trade/lobsnapshot.hpp" // Include the LOB Snapshot header file
 
 void StockExchange::start()
 {
@@ -414,13 +415,16 @@ void StockExchange::createDataFiles(std::string_view ticker)
     std::string suffix = std::string{exchange_name_} + "_" + std::string{ticker} + "_"  + timestamp;
     std::string trades_file = "trades_" + suffix + ".csv";
     std::string market_data_file = "data_" + suffix + ".csv";
+    std::string lob_snapshot_file = "lob_snapshot_" + suffix + ".csv"; // LOB Snapshot file
 
     // Create a CSV writers
     CSVWriterPtr trade_writer = std::make_shared<CSVWriter>(trades_file);
     CSVWriterPtr market_data_writer = std::make_shared<CSVWriter>(market_data_file);
+    CSVWriterPtr lob_snapshot_writer = std::make_shared<CSVWriter>(lob_snapshot_file); // LOB Snapshot writer
 
     trade_tapes_.insert({std::string{ticker}, trade_writer});
     market_data_feeds_.insert({std::string{ticker}, market_data_writer});
+    lob_snapshot_.insert({std::string{ticker}, lob_snapshot_writer}); // LOB Snapshot writer (inserted into lob_snapshot_ map)
 }
 
 void StockExchange::createMessageTape() 
@@ -442,7 +446,15 @@ void StockExchange::createMessageTape()
 void StockExchange::publishMarketData(std::string_view ticker)
 {
     MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData();
-    addMarketDataSnapshot(data);
+    addMarketDataSnapshot(data); // Existing market data snapshot (data_ files) 
+    
+    addLOBSnapshot(std::make_shared<LOBSnapshot>(
+    data->ticker,
+    data->timestamp,
+    data->best_bid,
+    data->best_ask,
+    data->micro_price,
+    data->mid_price)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
     
     MarketDataMessagePtr msg = std::make_shared<MarketDataMessage>();
     msg->data = data;
@@ -532,6 +544,11 @@ CSVWriterPtr StockExchange::getMarketDataFeedFor(std::string_view ticker)
     return market_data_feeds_.at(std::string{ticker});
 };
 
+CSVWriterPtr StockExchange::getLOBSnapshotFor(std::string_view ticker)
+{
+    return lob_snapshot_.at(std::string{ticker});
+};
+
 void StockExchange::addTradeToTape(TradePtr trade)
 {
     std::cout << *trade << "\n";
@@ -543,10 +560,18 @@ void StockExchange::addMarketDataSnapshot(MarketDataPtr data)
     getMarketDataFeedFor(data->ticker)->writeRow(data);
 }
 
+// Add LOB Snapshot to the LOB Snapshot file (selected attributes from data) 
+void StockExchange::addLOBSnapshot(LOBSnapshotPtr lob_data)
+{   
+    // Write the LOB Snapshot to the LOB Snapshot file (CSV)
+    getLOBSnapshotFor(lob_data->ticker)->writeRow(lob_data);
+}
+
 void StockExchange::addMessageToTape(MessagePtr msg)
 {
     message_tape_->writeRow(msg);
 }
+
 
 void StockExchange::broadcastToSubscribers(std::string_view ticker, MessagePtr msg)
 {

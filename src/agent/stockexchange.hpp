@@ -10,6 +10,8 @@
 #include "../order/orderfactory.hpp"
 #include "../trade/trade.hpp"
 #include "../trade/tradefactory.hpp"
+#include "../trade/marketdata.hpp"
+#include "../trade/lobsnapshot.hpp"
 #include "../utilities/syncqueue.hpp"
 #include "../utilities/csvwriter.hpp"
 #include "../utilities/csvprintable.hpp"
@@ -77,6 +79,9 @@ public:
     /** Returns the market data feed for the given ticker. */
     CSVWriterPtr getMarketDataFeedFor(std::string_view ticker);
 
+    /** Returns the LOB snapshot feed for the given ticker. */
+    CSVWriterPtr getLOBSnapshotFor(std::string_view ticker);
+
     /** Adds the given subscriber to the market data subscribers list. */
     void addSubscriber(std::string_view ticker, int subscriber_id, std::string_view address);
 
@@ -114,6 +119,9 @@ private:
 
     /** Logs the given market data snapshot. */
     void addMarketDataSnapshot(MarketDataPtr data);
+
+    /** Logs a snapshot of the LOB with selected attributes. */
+    void addLOBSnapshot(LOBSnapshotPtr lob_data);
 
     /** Creates a new message tape CSV file. */
     void createMessageTape();
@@ -171,6 +179,9 @@ private:
 
     /** Market data feed snapshots for each ticker traded. */
     std::unordered_map<std::string, CSVWriterPtr> market_data_feeds_;
+
+    /** LOB snapshot feed for each ticker traded. */
+    std::unordered_map<std::string, CSVWriterPtr> lob_snapshot_; 
 
     /** Message tape for each message received. */
     CSVWriterPtr message_tape_;
