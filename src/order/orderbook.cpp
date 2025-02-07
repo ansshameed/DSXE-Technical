@@ -286,8 +286,6 @@ double OrderBook::calculateSpread()
     return spread >= 0 ? spread : -1; // Ensure spread is never negative
 }
 
-
-
 MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
 {
     MarketDataPtr data = std::make_shared<MarketData>();
@@ -329,6 +327,7 @@ MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
     data->imbalance = calculateImbalance();
     data->spread = calculateSpread();
     data->time_diff = time_diff_;
+    data->total_volume = data->asks_volume + data->bids_volume;
   
     return data;
 } 

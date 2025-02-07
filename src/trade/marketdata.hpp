@@ -44,6 +44,7 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
         int side;
         double imbalance; 
         double spread;
+        double total_volume; 
 
         std::string describeCSVHeaders() const override
         {
@@ -107,6 +108,7 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
             ar & side; 
             ar & imbalance; 
             ar & spread; 
+            ar & total_volume;
         }
 };
 

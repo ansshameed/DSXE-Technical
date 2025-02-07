@@ -450,7 +450,7 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
 
     addLOBSnapshot(std::make_shared<LOBSnapshot>(
     data->ticker,
-    data->side, // FIX THIS WITH AGGRESSING ORDER
+    data->side, // AGGRESSING ORDER
     data->timestamp,
     data->time_diff, 
     data->best_bid,
@@ -458,7 +458,8 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
     data->micro_price,
     data->mid_price,
     data->imbalance, 
-    data->spread)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
+    data->spread,
+    data->total_volume)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
     
     MarketDataMessagePtr msg = std::make_shared<MarketDataMessage>();
     msg->data = data;
