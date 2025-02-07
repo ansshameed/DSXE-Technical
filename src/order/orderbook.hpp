@@ -90,6 +90,12 @@ public:
     /* Gets side; BID = 0, ASK = 1. */
     int getAggressingSide(Order::Side aggressing_side); 
 
+    /** Calculates order book imbalance. */
+    double calculateImbalance();
+
+    /** Calculates order book spread. */
+    double calculateSpread();
+
     /** Creates a new order book for the given ticker. */
     static OrderBookPtr create(std::string_view ticker)
     {

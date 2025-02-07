@@ -38,9 +38,12 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
         unsigned long long timestamp;
 
         // New Metrics 
+        unsigned long long time_diff; 
         double mid_price; 
         double micro_price;
         int side;
+        double imbalance; 
+        double spread;
 
         std::string describeCSVHeaders() const override
         {
@@ -97,10 +100,13 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
 
             ar & timestamp;
 
-            //Serialise new metrics 
+            //Serialise new metrics for LOB snapshot
+            ar & time_diff; 
             ar & mid_price;
             ar & micro_price;
             ar & side; 
+            ar & imbalance; 
+            ar & spread; 
         }
 };
 

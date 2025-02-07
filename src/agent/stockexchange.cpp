@@ -452,10 +452,13 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
     data->ticker,
     data->side, // FIX THIS WITH AGGRESSING ORDER
     data->timestamp,
+    data->time_diff, 
     data->best_bid,
     data->best_ask,
     data->micro_price,
-    data->mid_price)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
+    data->mid_price,
+    data->imbalance, 
+    data->spread)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
     
     MarketDataMessagePtr msg = std::make_shared<MarketDataMessage>();
     msg->data = data;

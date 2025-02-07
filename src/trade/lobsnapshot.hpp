@@ -15,26 +15,29 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
     public:
         LOBSnapshot() = default;
 
-        LOBSnapshot(std::string ticker, int side, unsigned long long timestamp, double best_bid, double best_ask, double micro_price, double mid_price)
-            : ticker(ticker), side(side), timestamp(timestamp), best_bid(best_bid), best_ask(best_ask), micro_price(micro_price), mid_price(mid_price) {}
+        LOBSnapshot(std::string ticker, int side, unsigned long long timestamp, unsigned long long time_diff, double best_bid, double best_ask, double micro_price, double mid_price, double imbalance, double spread)
+            : ticker(ticker), side(side), timestamp(timestamp), time_diff(time_diff), best_bid(best_bid), best_ask(best_ask), micro_price(micro_price), mid_price(mid_price), imbalance(imbalance), spread(spread) {}
 
         std::string ticker;
-        int side; // 0 for BID, 1 for ASK
+        double side; // 0 for BID, 1 for ASK
         unsigned long long timestamp;
+        unsigned long long time_diff;
         double best_bid;
         double best_ask;
         double micro_price;
         double mid_price;
+        double imbalance; 
+        double spread;
 
 
         std::string describeCSVHeaders() const override
         {
-            return "timestamp,side,best_bid,best_ask,micro_price,mid_price"; // CSV headers for the LOB Snapshot
+            return "timestamp,time_diff,side,best_bid,best_ask,micro_price,mid_price,imbalance,spread"; // CSV headers for the LOB Snapshot
         }
 
         std::string toCSV() const override
         {
-            return std::to_string(timestamp) + "," + std::to_string(side) + "," + std::to_string(best_bid) + "," + std::to_string(best_ask) + "," + std::to_string(micro_price) + "," + std::to_string(mid_price);
+            return std::to_string(timestamp) + "," + std::to_string(time_diff) + "," + std::to_string(side) + "," + std::to_string(best_bid) + "," + std::to_string(best_ask) + "," + std::to_string(micro_price) + "," + std::to_string(mid_price) + "," + std::to_string(imbalance) + "," + std::to_string(spread);
         }
 
     private:
@@ -44,10 +47,13 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
             os << "LOB Snapshot:\n" 
             << "SIDE: " << data.side << "\n"
             << "TIMESTAMP: " << data.timestamp << "\n"
+            << "TIME DIFF: " << data.time_diff << "\n"
             << "BEST BID: $" << data.best_bid << "\n" 
             << "BEST ASK: $" << data.best_ask << "\n" 
             << "MICRO PRICE: $" << data.micro_price << "\n"
-            << "MID PRICE: $" << data.mid_price << "\n";
+            << "MID PRICE: $" << data.mid_price << "\n"
+            << "IMBALANCE: " << data.imbalance << "\n"
+            << "SPREAD: " << data.spread << "\n";
             return os;
         }
 
@@ -56,11 +62,14 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
         void serialize(Archive & ar, const unsigned int version)
         {
             ar & timestamp;
+            ar & time_diff;
             ar & side; 
             ar & best_bid;
             ar & best_ask;
             ar & micro_price;
             ar & mid_price;
+            ar & imbalance;
+            ar & spread;
         }
 };
 

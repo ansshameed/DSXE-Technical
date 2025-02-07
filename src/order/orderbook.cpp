@@ -237,6 +237,36 @@ int OrderBook::getAggressingSide(Order::Side aggressing_side)
     return (aggressing_side == Order::Side::BID) ? 0 : 1; // Return 0 if BID, 1 if ASK
 }
 
+double OrderBook::calculateImbalance() 
+{   
+    double qB = getTotalBidVolume();
+    double qA = getTotalAskVolume();
+    if (qB == 0 && qA == 0) // If there are no bids or asks in the order book - avoids division by 0
+    {
+        return 0;
+    }
+    return ((qB - qA) / (qB + qA)); // Calculate imbalance as difference between bid and ask volumes divided by sum of bid and ask volumes
+}
+
+double OrderBook::calculateSpread() 
+{   
+    auto best_bid = bestBid();
+    auto best_ask = bestAsk();
+
+    // Ensure both best bid and best ask are valid
+    if (!best_bid.has_value() || !best_ask.has_value()) {
+        return -1; // Indicate invalid spread when one side is empty
+    }
+
+    // Ensure spread is calculated correctly
+    double spread = best_ask.value()->price - best_bid.value()->price;
+
+    // Return spread
+    return spread >= 0 ? spread : -1; // Ensure spread is never negative
+}
+
+
+
 MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
 {
     MarketDataPtr data = std::make_shared<MarketData>();
@@ -275,6 +305,8 @@ MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
     data->mid_price = calculateMidPrice();
     data->micro_price = calculateMicroPrice();
     data->side = getAggressingSide(aggressing_side);
+    data->imbalance = calculateImbalance();
+    data->spread = calculateSpread();
   
     return data;
 } 
