@@ -39,7 +39,8 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
 
         // New Metrics 
         double mid_price; 
-        double micro_price; 
+        double micro_price;
+        int side;
 
         std::string describeCSVHeaders() const override
         {
@@ -99,6 +100,7 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
             //Serialise new metrics 
             ar & mid_price;
             ar & micro_price;
+            ar & side; 
         }
 };
 

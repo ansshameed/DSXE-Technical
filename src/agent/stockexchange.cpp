@@ -105,7 +105,7 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
         ExecutionReportMessagePtr report = ExecutionReportMessage::createFromOrder(order);
         report->sender_id = this->agent_id;
         sendExecutionReport(std::to_string(order->sender_id), report);
-        publishMarketData(msg->ticker);
+        publishMarketData(msg->ticker, order->side);
     }    
 };
 
@@ -325,7 +325,7 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
     sendExecutionReport(std::to_string(aggressing_order->sender_id), aggressing_report);
 
     // Broadcast the market data to all subscribers
-    publishMarketData(resting_order->ticker);
+    publishMarketData(resting_order->ticker, aggressing_order->side);
 }
 
 void StockExchange::sendExecutionReport(std::string_view trader, ExecutionReportMessagePtr msg)
@@ -443,13 +443,16 @@ void StockExchange::createMessageTape()
     this->message_tape_ = std::make_shared<CSVWriter>(messages_file);
 }
 
-void StockExchange::publishMarketData(std::string_view ticker)
+void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side)
 {
     MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData();
-    addMarketDataSnapshot(data); // Existing market data snapshot (data_ files) 
-    
+    addMarketDataSnapshot(data); // Existing market data snapshot (data_ files)
+
+    int side = (aggressing_side == Order::Side::BID) ? 0 : 1; // SIDE 
+
     addLOBSnapshot(std::make_shared<LOBSnapshot>(
     data->ticker,
+    side, // FIX THIS WITH AGGRESSING ORDER
     data->timestamp,
     data->best_bid,
     data->best_ask,

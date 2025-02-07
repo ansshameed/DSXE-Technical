@@ -269,6 +269,7 @@ MarketDataPtr OrderBook::getLiveMarketData()
     // Additionals for DT 
     data->mid_price = calculateMidPrice();
     data->micro_price = calculateMicroPrice();
+    //data->side
   
     return data;
 } 

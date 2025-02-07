@@ -137,7 +137,7 @@ private:
     void sendExecutionReport(std::string_view trader, ExecutionReportMessagePtr msg);
 
     /** Publishes market data to all subscribers. */
-    void publishMarketData(std::string_view ticker);
+    void publishMarketData(std::string_view ticker, Order::Side aggressing_side);
 
     /** Broadcasts the given message to all subscribers of the given ticker. */
     void broadcastToSubscribers(std::string_view ticker, MessagePtr msg);
