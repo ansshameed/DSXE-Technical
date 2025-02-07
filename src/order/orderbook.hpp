@@ -120,6 +120,7 @@ private:
     std::unordered_map<double, int> asks_sizes_;
 
     std::optional<TradePtr> last_trade_;
+    unsigned long long time_diff_ = 0; // Time difference between current and previous trade
 
     std::optional<double> trade_high_;
     std::optional<double> trade_low_;
@@ -131,6 +132,8 @@ private:
     const size_t lookback_period_ = 14;
 
     double previous_volume_traded_; 
+
+
 };
 
 #endif // ORDERBOOK_HPP

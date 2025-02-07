@@ -177,7 +177,28 @@ std::optional<double> OrderBook::calculateLow()
 
 void OrderBook::logTrade(TradePtr trade)
 {
-    std::cout << "Logging trade: Price = " << trade->price << ", Quantity = " << trade->quantity << "\n";
+    std::cout << "Logging trade: Price = " << trade->price << ", Quantity = " << trade->quantity << ", Timestamp = " << trade->timestamp << "\n";
+
+    // Compute time difference using previous timestamp (for LOB)
+    if (last_trade_.has_value())
+    {
+        time_diff_ = trade->timestamp - last_trade_.value()->timestamp;
+        std::cout << "Last trade timestamp: " << last_trade_.value()->timestamp << "\n"; // Debug statement for last trade timestamp
+        std::cout << "Time difference between current and last trade: " << time_diff_ << " nanoseconds\n"; // Debug statement for time difference
+    } 
+    else 
+    { 
+        time_diff_ = 0; // For first trade the time diff would be set to 0
+    }
+
+    // Debug statement to print last trade details
+    if (last_trade_.has_value())
+    {
+        std::cout << "Last trade details: Price = " << last_trade_.value()->price 
+                  << ", Quantity = " << last_trade_.value()->quantity 
+                  << ", Timestamp = " << last_trade_.value()->timestamp << "\n";
+    }
+
     last_trade_ = trade;
     updateRollingWindow(trade->price, trade->price);
     trade_high_ = calculateHigh();
@@ -307,6 +328,7 @@ MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
     data->side = getAggressingSide(aggressing_side);
     data->imbalance = calculateImbalance();
     data->spread = calculateSpread();
+    data->time_diff = time_diff_;
   
     return data;
 } 
