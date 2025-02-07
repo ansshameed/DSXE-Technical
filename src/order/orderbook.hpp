@@ -72,20 +72,23 @@ public:
     /** Logs the details of the executed trade for statistics. */
     void logTrade(TradePtr trade);
 
-    //** Gets total bid volume. */
+    /** Gets total bid volume. */
     double getTotalBidVolume(); 
 
     /** Gets total ask volume. */
     double getTotalAskVolume(); 
 
     /** Returns live level 1 market data. */
-    MarketDataPtr getLiveMarketData();
+    MarketDataPtr getLiveMarketData(Order::Side aggressing_side);
 
     /** Calculates mid price.  */
     double calculateMidPrice();
 
-    //** Calculates micro price. */
+    /** Calculates micro price. */
     double calculateMicroPrice();
+
+    /* Gets side; BID = 0, ASK = 1. */
+    int getAggressingSide(Order::Side aggressing_side); 
 
     /** Creates a new order book for the given ticker. */
     static OrderBookPtr create(std::string_view ticker)

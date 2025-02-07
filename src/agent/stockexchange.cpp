@@ -445,14 +445,12 @@ void StockExchange::createMessageTape()
 
 void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side)
 {
-    MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData();
+    MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData(aggressing_side);
     addMarketDataSnapshot(data); // Existing market data snapshot (data_ files)
-
-    int side = (aggressing_side == Order::Side::BID) ? 0 : 1; // SIDE 
 
     addLOBSnapshot(std::make_shared<LOBSnapshot>(
     data->ticker,
-    side, // FIX THIS WITH AGGRESSING ORDER
+    data->side, // FIX THIS WITH AGGRESSING ORDER
     data->timestamp,
     data->best_bid,
     data->best_ask,

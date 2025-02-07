@@ -232,7 +232,12 @@ double OrderBook::calculateMicroPrice()
     return (best_bid_price * best_ask_size + best_ask_price * best_bid_size) / (best_bid_size + best_ask_size); // Calculate micro price as weighted average of best bid and best ask prices
 }
 
-MarketDataPtr OrderBook::getLiveMarketData()
+int OrderBook::getAggressingSide(Order::Side aggressing_side)
+{
+    return (aggressing_side == Order::Side::BID) ? 0 : 1; // Return 0 if BID, 1 if ASK
+}
+
+MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
 {
     MarketDataPtr data = std::make_shared<MarketData>();
     data->ticker = ticker_;
@@ -269,7 +274,7 @@ MarketDataPtr OrderBook::getLiveMarketData()
     // Additionals for DT 
     data->mid_price = calculateMidPrice();
     data->micro_price = calculateMicroPrice();
-    //data->side
+    data->side = getAggressingSide(aggressing_side);
   
     return data;
 } 
