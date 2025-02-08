@@ -126,6 +126,9 @@ private:
     /** Creates a new message tape CSV file. */
     void createMessageTape();
 
+    /** Calculates p* (p equilibrium) */
+    double calculatePEquilibrium(std::string_view ticker);
+
     /** Adds the given message to the message tape. */
     void addMessageToTape(MessagePtr msg);
 
@@ -204,6 +207,9 @@ private:
 
     /** Used for randomising the order of UDP broadcasts */
     std::mt19937 random_generator_;
+
+    /** Add trade to in-memory list */
+    std::unordered_map<std::string, std::vector<TradePtr>> in_memory_trades_;
 };
 
 #endif

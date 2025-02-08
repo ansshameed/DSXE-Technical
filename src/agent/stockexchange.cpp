@@ -443,10 +443,43 @@ void StockExchange::createMessageTape()
     this->message_tape_ = std::make_shared<CSVWriter>(messages_file);
 }
 
+double StockExchange::calculatePEquilibrium(std::string_view ticker)
+{
+    const auto& trade_tape = in_memory_trades_[std::string(ticker)]; // Get the trade tape for the given ticker
+
+    if (trade_tape.empty()) // If no trades have been made
+    {
+        return 0.0; // No trades available
+    }
+
+    std::vector<double> trade_prices; // Vector to store trade prices
+    for (const auto& trade : trade_tape) { // Iterate through all trades
+        trade_prices.push_back(trade->price);
+    }
+
+    // Apply exponentially decreasing weight decay
+    std::vector<double> weights; 
+    for (size_t i = 0; i < trade_prices.size(); ++i) { 
+        weights.push_back(std::pow(0.9, i)); // Exponential decay with factor 0.9
+    }
+
+    // Calculate weighted average of trade prices
+    double weighted_sum = 0; 
+    double weight_sum = 0; 
+    for (size_t i = 0; i < trade_prices.size(); ++i) { 
+        weighted_sum += trade_prices[i] * weights[i]; 
+        weight_sum += weights[i]; 
+    }
+
+    return weighted_sum / weight_sum; 
+}
+
 void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side)
 {
     MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData(aggressing_side);
     addMarketDataSnapshot(data); // Existing market data snapshot (data_ files)
+
+    double p_equilibrium = calculatePEquilibrium(ticker); // Calculate the equilibrium price
 
     addLOBSnapshot(std::make_shared<LOBSnapshot>(
     data->ticker,
@@ -459,7 +492,8 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
     data->mid_price,
     data->imbalance, 
     data->spread,
-    data->total_volume)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
+    data->total_volume,
+    p_equilibrium)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
     
     MarketDataMessagePtr msg = std::make_shared<MarketDataMessage>();
     msg->data = data;
@@ -558,6 +592,9 @@ void StockExchange::addTradeToTape(TradePtr trade)
 {
     std::cout << *trade << "\n";
     getTradeTapeFor(trade->ticker)->writeRow(trade);
+
+    // Add trade to in-memory list 
+    in_memory_trades_[trade->ticker].push_back(trade);
 };
 
 void StockExchange::addMarketDataSnapshot(MarketDataPtr data)

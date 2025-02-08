@@ -133,7 +133,6 @@ private:
 
     double previous_volume_traded_; 
 
-
 };
 
 #endif // ORDERBOOK_HPP
