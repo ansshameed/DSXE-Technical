@@ -15,8 +15,8 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
     public:
         LOBSnapshot() = default;
 
-        LOBSnapshot(std::string ticker, int side, unsigned long long timestamp, unsigned long long time_diff, double best_bid, double best_ask, double micro_price, double mid_price, double imbalance, double spread, double total_volume, double p_equilibrium)
-            : ticker(ticker), side(side), timestamp(timestamp), time_diff(time_diff), best_bid(best_bid), best_ask(best_ask), micro_price(micro_price), mid_price(mid_price), imbalance(imbalance), spread(spread), total_volume(total_volume), p_equilibrium(p_equilibrium) {}
+        LOBSnapshot(std::string ticker, int side, unsigned long long timestamp, unsigned long long time_diff, double best_bid, double best_ask, double micro_price, double mid_price, double imbalance, double spread, double total_volume, double p_equilibrium, double smiths_alpha)
+            : ticker(ticker), side(side), timestamp(timestamp), time_diff(time_diff), best_bid(best_bid), best_ask(best_ask), micro_price(micro_price), mid_price(mid_price), imbalance(imbalance), spread(spread), total_volume(total_volume), p_equilibrium(p_equilibrium), smiths_alpha(smiths_alpha) {}
 
         std::string ticker;
         double side; // 0 for BID, 1 for ASK
@@ -30,16 +30,17 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
         double spread;
         double total_volume; 
         double p_equilibrium; 
+        double smiths_alpha; 
 
 
         std::string describeCSVHeaders() const override
         {
-            return "timestamp, time_diff, side, best_bid, best_ask, micro_price, mid_price, imbalance, spread, total_volume, p_equilibrium"; // CSV headers for the LOB Snapshot
+            return "timestamp, time_diff, side, best_bid, best_ask, micro_price, mid_price, imbalance, spread, total_volume, p_equilibrium, smiths_alpha"; // CSV headers for the LOB Snapshot
         }
 
         std::string toCSV() const override
         {
-            return std::to_string(timestamp) + ", " + std::to_string(time_diff) + ", " + std::to_string(side) + ", " + std::to_string(best_bid) + ", " + std::to_string(best_ask) + ", " + std::to_string(micro_price) + ", " + std::to_string(mid_price) + ", " + std::to_string(imbalance) + ", " + std::to_string(spread) + ", " + std::to_string(total_volume) + "," + std::to_string(p_equilibrium); 
+            return std::to_string(timestamp) + ", " + std::to_string(time_diff) + ", " + std::to_string(side) + ", " + std::to_string(best_bid) + ", " + std::to_string(best_ask) + ", " + std::to_string(micro_price) + ", " + std::to_string(mid_price) + ", " + std::to_string(imbalance) + ", " + std::to_string(spread) + ", " + std::to_string(total_volume) + "," + std::to_string(p_equilibrium) + "," + std::to_string(smiths_alpha);
         }
 
     private:
@@ -56,7 +57,7 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
             << "MID PRICE: $" << data.mid_price << "\n"
             << "IMBALANCE: " << data.imbalance << "\n"
             << "SPREAD: " << data.spread << "\n"
-            << "TOTAL VOLUME: " << data.total_volume << "\n";            //ADD P EQUILIBRIUM << HERE    
+            << "TOTAL VOLUME: " << data.total_volume << "\n";            //ADD P EQUILIBRIUM << AND SMITH'S ALPHA << HERE
             return os;
         }
 
@@ -75,6 +76,7 @@ class LOBSnapshot : public CSVPrintable, std::enable_shared_from_this<LOBSnapsho
             ar & spread;
             ar & total_volume;
             ar & p_equilibrium;
+            ar & smiths_alpha; 
         }
 };
 

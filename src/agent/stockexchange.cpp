@@ -471,7 +471,36 @@ double StockExchange::calculatePEquilibrium(std::string_view ticker)
         weight_sum += weights[i]; 
     }
 
+    // NOTE: p_equilibrium value stays same/barely changes if no new trades placed. Only changes when significant trades affect the equilibrium price. 
+
     return weighted_sum / weight_sum; 
+}
+
+double StockExchange::calculateSmithsAlpha(std::string_view ticker) 
+{ 
+    const auto& trade_tape = in_memory_trades_[std::string(ticker)]; // Get the trade tape for the given ticker
+
+    if (trade_tape.empty()) // If no trades have been made
+    {
+        return 0.0; // No trades available
+    }
+
+    std::vector<double> trade_prices; // Vector to store trade prices
+    for (const auto& trade : trade_tape) { // Iterate through all trades
+        trade_prices.push_back(trade->price);
+    }
+
+    // Calculate p_equilibrium
+    double p_equilibrium = calculatePEquilibrium(ticker);
+
+    // Compute Smith's Alpha
+    double sum_squared_diff = 0; 
+    for (const auto& price : trade_prices) { // Iterate through all trade prices
+        sum_squared_diff += std::pow(price - p_equilibrium, 2); // Calculate sum of squared differences = (price - p_equilibrium)^2
+    }
+    double smiths_alpha = std::sqrt(sum_squared_diff / trade_prices.size()); // Calculate square root of the average squared difference (divide by number of trades and then sqrt)
+
+    return smiths_alpha;
 }
 
 void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side)
@@ -480,6 +509,7 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
     addMarketDataSnapshot(data); // Existing market data snapshot (data_ files)
 
     double p_equilibrium = calculatePEquilibrium(ticker); // Calculate the equilibrium price
+    double smiths_alpha = calculateSmithsAlpha(ticker); // Calculate Smith's Alpha
 
     addLOBSnapshot(std::make_shared<LOBSnapshot>(
     data->ticker,
@@ -493,7 +523,8 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
     data->imbalance, 
     data->spread,
     data->total_volume,
-    p_equilibrium)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
+    p_equilibrium, 
+    smiths_alpha)); // Updated LOB Snapshot (lob_snapshot_ files); selected attributes 
     
     MarketDataMessagePtr msg = std::make_shared<MarketDataMessage>();
     msg->data = data;

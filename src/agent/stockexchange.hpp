@@ -129,6 +129,9 @@ private:
     /** Calculates p* (p equilibrium) */
     double calculatePEquilibrium(std::string_view ticker);
 
+    /** Calculate Smith's Alpha */
+    double calculateSmithsAlpha(std::string_view ticker);
+
     /** Adds the given message to the message tape. */
     void addMessageToTape(MessagePtr msg);
 
