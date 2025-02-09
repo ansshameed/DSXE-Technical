@@ -51,6 +51,7 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
+        displayProfitability();
         std::cout << "Trading window ended.\n";
         is_trading_ = false;
         lock.unlock();
@@ -71,11 +72,40 @@ public:
 
         // std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
         // " Qty remaining = " << msg->order->remaining_quantity << "\n";
+
+        //Calculate Profitability
+        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+        {   
+            if (msg->trade) { 
+                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
+                executed_trades_.push_back(trade);
+            }
+        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
     {
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
+    }
+
+    void displayProfitability() 
+    { 
+        // Calculate profit or loss
+
+        for (const auto& trade : executed_trades_) 
+        { 
+            if (trade.side == Order::Side::ASK) // Sell order 
+            { 
+                total_profit_ += trade.price * trade.quantity; 
+            }
+            else if (trade.side == Order::Side::BID) // Buy order 
+            { 
+                total_profit_ -= trade.price * trade.quantity; 
+            }
+        }
+
+        std::cout << "Total Profit: " << total_profit_ << "\n";
+        
     }
 
 private:
@@ -95,7 +125,6 @@ private:
                 lock.lock();
             }
             lock.unlock();
-
             std::cout << "Finished actively trading.\n";
         });
     }
@@ -160,6 +189,16 @@ private:
     constexpr static double MIN_PRICE = 1.0;
     constexpr static double MAX_PRICE = 200.0;
     constexpr static double REL_JITTER = 0.25;
+
+    // Profitability parameters 
+    struct Trade { 
+        double price;
+        int quantity;
+        Order::Side side;
+    }; 
+    std::vector<Trade> executed_trades_; 
+    double total_profit_ = 0.0;
+
 };
 
 #endif

@@ -2,6 +2,13 @@
 #define TRADER_SHVR_HPP
 
 #include "traderagent.hpp"
+#include <thread>
+#include <mutex>
+#include <random>
+#include <chrono>
+#include <vector>
+#include "../utilities/syncqueue.hpp"
+#include "../trade/profitability.hpp"
 
 class TraderShaver : public TraderAgent
 {
@@ -21,6 +28,20 @@ public:
 
         // Add delayed start
         addDelayedStart(config->delay);
+        
+        // Initialise CSV writer for profitability data
+        std::string filename = "profitability_" + config->exchange_name + "_" + config->ticker + ".csv";
+        csv_writer_ = std::make_shared<CSVWriter>(filename);
+    }
+
+    void terminate() override
+    {
+        if (trading_thread_ != nullptr)
+        {
+            trading_thread_->join();
+            delete(trading_thread_);
+        }
+        TraderAgent::terminate();
     }
 
     void onTradingStart() override
@@ -30,9 +51,11 @@ public:
     }
 
     void onTradingEnd() override
-    {
+    {   
         is_trading_ = false;
+        displayProfitability();
         std::cout << "Trading window ended.\n";
+
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -50,13 +73,63 @@ public:
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
     {
+        // Order added to order book
+        if (msg->order->status == Order::Status::NEW)
+        {
+            last_accepted_order_id_ = msg->order->id;
+        }
+
         //std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
         //" Qty remaining = " << msg->order->remaining_quantity << "\n";
+
+        //Calculate Profitability
+        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+        {   
+            if (msg->trade) { 
+                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
+                executed_trades_.push_back(trade);
+            }
+        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
     {
         throw std::runtime_error("Shaver trader does not cancel orders therefore cannot receive cancel rejection.");
+    }
+
+    void displayProfitability() 
+    { 
+
+        double buyer_profit = 0.0; 
+        double seller_profit = 0.0; 
+
+        // Calculate profit or loss
+        for (const auto& trade : executed_trades_) 
+        { 
+            if (trade.side == Order::Side::ASK) // Sell order 
+            { 
+                seller_profit += trade.price * trade.quantity; 
+            }
+            else if (trade.side == Order::Side::BID) // Buy order 
+            { 
+                buyer_profit -= trade.price * trade.quantity; 
+            }
+        }
+
+        total_profit_ = buyer_profit + seller_profit;
+        std::cout << "Total Profit: " << total_profit_ << "\n";
+
+        // Write the results to a CSV file
+        ProfitabilityRecordPtr record = std::make_shared<ProfitabilityRecord>(
+            "Shaver",
+            (trader_side_ == Order::Side::BID ? "Buyer" : "Seller"),
+            buyer_profit,
+            seller_profit,
+            total_profit_
+        );
+    
+        csv_writer_->writeRow(record); 
+
     }
 
 private:
@@ -75,15 +148,46 @@ private:
         }
     }
 
+    void sleep()
+    {
+        std::uniform_real_distribution<> dist(-REL_JITTER, REL_JITTER);
+        unsigned long jitter = dist(random_generator_);
+        unsigned long sleep_time_ms = std::round(trade_interval_ms_ * (1.0 + jitter));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
+    }
+
     std::string exchange_;
     std::string ticker_;
     Order::Side trader_side_;
     double limit_price_;
+    unsigned int trade_interval_ms_ ; 
 
     bool is_trading_ = false;
 
     constexpr static double MIN_PRICE = 1.0;
     constexpr static double MAX_PRICE = 200.0;
+    constexpr static double REL_JITTER = 0.25;
+
+    std::optional<int> last_accepted_order_id_ = std::nullopt;
+
+    // Profitability parameters 
+    struct Trade { 
+        double price;
+        int quantity;
+        Order::Side side;
+    }; 
+    std::vector<Trade> executed_trades_; 
+    double total_profit_ = 0.0;
+
+    // Mutex and Actively Trade attributes mechanism
+    std::mt19937 random_generator_;
+    std::mutex mutex_;
+    std::thread* trading_thread_ = nullptr;
+
+     // CSV writer for profitability data
+     std::shared_ptr<CSVWriter> csv_writer_;
+
+
 };
 
 #endif
