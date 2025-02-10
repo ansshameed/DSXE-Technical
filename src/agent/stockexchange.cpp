@@ -354,8 +354,10 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
                 throw std::runtime_error("Failed to cast message to ProfitMessage");
             }
             std::unique_lock<std::mutex> lock(profit_mutex_);
-            agent_profits_[msg->agent_id] = msg->profit;
-            std::cout << "Agent ID: " << msg->agent_id << " Agent Name: " << msg->agent_name << " Total Profit: " << msg->profit << "\n";
+            //agent_profits_[msg->agent_id] = msg->profit;
+            std::cout << "Individual Profit: Agent ID: " << msg->agent_id 
+                  << " Agent Name: " << msg->agent_name 
+                  << " Profit: " << msg->profit << "\n";
             total_profits_[msg->agent_name] += msg->profit;
             
             // Determine if agent is buyer or seller (BUYER - negative, SELLER - positive)
@@ -364,6 +366,9 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
             } else {
                 buyer_profits_[msg->agent_name] += msg->profit;
             }
+
+            // Store individual trader agent profits if needed
+            agent_profits_[msg->agent_id] = msg->profit;
 
             break;
         }
@@ -619,11 +624,14 @@ void StockExchange::endTradingSession()
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
 
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+
+
     // Print total profits for each agent type
     std::cout << "Total Profits by Agent Type:\n";
     for (const auto& [agent_name, profit_sum] : total_profits_)
     {
-        // net_profit here is the aggregated sum for all traders of this type.
+        // profit_sum here is the aggregated sum for all traders of this type.
         std::cout << "Agent Type: " << agent_name << " Total Profit: " << profit_sum << "\n";
     }
 };
