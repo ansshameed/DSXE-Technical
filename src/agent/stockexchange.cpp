@@ -6,6 +6,9 @@
 #include "../trade/lobsnapshot.hpp" // Include the LOB Snapshot header file
 #include "../message/profitmessage.hpp" // Include the Profit Message header file
 
+#include <iostream> // to print full profitability
+#include <iomanip>
+
 void StockExchange::start()
 {
     // Create a Matching Engine Thread
@@ -632,7 +635,7 @@ void StockExchange::endTradingSession()
     for (const auto& [agent_name, profit_sum] : total_profits_)
     {
         // profit_sum here is the aggregated sum for all traders of this type.
-        std::cout << "Agent Type: " << agent_name << " Total Profit: " << profit_sum << "\n";
+        std::cout << "Agent Type: " << agent_name << " Total Profit: " << std::fixed << std::setprecision(0) << profit_sum << "\n";
     }
 };
 
