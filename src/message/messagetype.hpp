@@ -12,7 +12,8 @@ enum class MessageType : int
     MARKET_ORDER,
     CANCEL_ORDER,
     EXECUTION_REPORT,
-    CANCEL_REJECT
+    CANCEL_REJECT, 
+    PROFIT
 };
 
 #endif

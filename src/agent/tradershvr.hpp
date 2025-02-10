@@ -8,7 +8,7 @@
 #include <chrono>
 #include <vector>
 #include "../utilities/syncqueue.hpp"
-#include "../trade/profitability.hpp"
+#include "../message/profitmessage.hpp"
 
 class TraderShaver : public TraderAgent
 {
@@ -28,10 +28,6 @@ public:
 
         // Add delayed start
         addDelayedStart(config->delay);
-        
-        // Initialise CSV writer for profitability data
-        std::string filename = "profitability_" + config->exchange_name + "_" + config->ticker + ".csv";
-        csv_writer_ = std::make_shared<CSVWriter>(filename);
     }
 
     void terminate() override
@@ -54,6 +50,7 @@ public:
     {   
         is_trading_ = false;
         displayProfitability();
+        sendProfitToExchange();
         std::cout << "Trading window ended.\n";
 
     }
@@ -83,7 +80,7 @@ public:
         //" Qty remaining = " << msg->order->remaining_quantity << "\n";
 
         //Calculate Profitability
-        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+    if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
         {   
             if (msg->trade) { 
                 Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
@@ -117,22 +114,19 @@ public:
         }
 
         total_profit_ = buyer_profit + seller_profit;
-        std::cout << "Total Profit: " << total_profit_ << "\n";
-
-        // Write the results to a CSV file
-        ProfitabilityRecordPtr record = std::make_shared<ProfitabilityRecord>(
-            "Shaver",
-            (trader_side_ == Order::Side::BID ? "Buyer" : "Seller"),
-            buyer_profit,
-            seller_profit,
-            total_profit_
-        );
-    
-        csv_writer_->writeRow(record); 
-
+        std::cout << "Total Profit: " << total_profit_ << "\n"; 
     }
 
 private:
+
+    void sendProfitToExchange()
+        {
+            ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+            profit_msg->agent_id = this->agent_id;
+            profit_msg->agent_name = agent_name_;
+            profit_msg->profit = total_profit_;
+            sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+        }
 
     double getShaverPrice(MarketDataMessagePtr msg)
     {
@@ -184,9 +178,7 @@ private:
     std::mutex mutex_;
     std::thread* trading_thread_ = nullptr;
 
-     // CSV writer for profitability data
-     std::shared_ptr<CSVWriter> csv_writer_;
-
+    std::string agent_name_ = "Shaver";
 
 };
 

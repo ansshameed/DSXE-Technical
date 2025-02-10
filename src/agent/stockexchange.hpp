@@ -213,6 +213,13 @@ private:
 
     /** Add trade to in-memory list */
     std::unordered_map<std::string, std::vector<TradePtr>> in_memory_trades_;
+
+    /** Profit attributes. */
+    std::unordered_map<int, double> agent_profits_; 
+    std::mutex profit_mutex_; 
+    std::unordered_map<std::string, double> total_profits_;
+    std::unordered_map<std::string, double> buyer_profits_;
+    std::unordered_map<std::string, double> seller_profits_;
 };
 
 #endif

@@ -4,6 +4,7 @@
 #include <random>
 
 #include "traderagent.hpp"
+#include "../message/profitmessage.hpp"
 
 /** Prototype ZIC trader implementation. */
 class TraderZIC : public TraderAgent
@@ -51,8 +52,9 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        displayProfitability();
         std::cout << "Trading window ended.\n";
+        displayProfitability();
+        sendProfitToExchange(); 
         is_trading_ = false;
         lock.unlock();
     }
@@ -129,6 +131,15 @@ private:
         });
     }
 
+    void sendProfitToExchange()
+        {
+            ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+            profit_msg->agent_id = this->agent_id;
+            profit_msg->agent_name = agent_name_;
+            profit_msg->profit = total_profit_;
+            sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+        }
+
     void sleep()
     {
         // Generate a random jitter
@@ -198,6 +209,8 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
+
+    std::string agent_name_ = "ZIC";
 
 };
 

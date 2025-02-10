@@ -4,6 +4,7 @@
 #include "stockexchange.hpp"
 #include "../utilities/syncqueue.hpp"
 #include "../trade/lobsnapshot.hpp" // Include the LOB Snapshot header file
+#include "../message/profitmessage.hpp" // Include the Profit Message header file
 
 void StockExchange::start()
 {
@@ -346,6 +347,26 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
             onSubscribe(msg);
             break;
         }
+        case MessageType::PROFIT:
+        {
+            ProfitMessagePtr msg = std::dynamic_pointer_cast<ProfitMessage>(message);
+            if (msg == nullptr) {
+                throw std::runtime_error("Failed to cast message to ProfitMessage");
+            }
+            std::unique_lock<std::mutex> lock(profit_mutex_);
+            agent_profits_[msg->agent_id] = msg->profit;
+            std::cout << "Agent ID: " << msg->agent_id << " Agent Name: " << msg->agent_name << " Total Profit: " << msg->profit << "\n";
+            total_profits_[msg->agent_name] += msg->profit;
+            
+            // Determine if agent is buyer or seller (BUYER - negative, SELLER - positive)
+            if (msg->profit > 0) {
+                seller_profits_[msg->agent_name] += msg->profit;
+            } else {
+                buyer_profits_[msg->agent_name] += msg->profit;
+            }
+
+            break;
+        }
         default:
         {   
             // Send message to the matching engine
@@ -596,6 +617,14 @@ void StockExchange::endTradingSession()
     for (auto const& [ticker, ticker_subscribers] : subscribers_)
     {
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
+    }
+
+    // Print total profits for each agent type
+    std::cout << "Total Profits by Agent Type:\n";
+    for (const auto& [agent_name, profit_sum] : total_profits_)
+    {
+        // net_profit here is the aggregated sum for all traders of this type.
+        std::cout << "Agent Type: " << agent_name << " Total Profit: " << profit_sum << "\n";
     }
 };
 

@@ -19,6 +19,7 @@
 #include "../message/cancel_reject_message.hpp"
 #include "../message/config_message.hpp"
 #include "../message/config_ack_message.hpp"
+#include "../message/profitmessage.hpp"
 #include "../order/order.hpp"
 #include "../order/limitorder.hpp"
 #include "../order/marketorder.hpp"
@@ -32,6 +33,7 @@ BOOST_CLASS_EXPORT(MarketOrderMessage);
 BOOST_CLASS_EXPORT(CancelOrderMessage);
 BOOST_CLASS_EXPORT(EventMessage);
 BOOST_CLASS_EXPORT(CancelRejectMessage);
+BOOST_CLASS_EXPORT(ProfitMessage);
 
 /** TODO: This should be elsewhere */
 BOOST_CLASS_EXPORT(AgentConfig);
