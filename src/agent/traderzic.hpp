@@ -218,7 +218,6 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
-
     std::string agent_name_ = "ZIC";
 
 };

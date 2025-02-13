@@ -59,31 +59,28 @@ public:
         }
         lock.unlock(); 
 
-        if (is_trading_) 
-        { 
-            double closing_price = msg->data->last_price_traded; // Closing price is the last price traded
-            double volume = msg->data->volume_per_tick; // Volume is the last quantity traded
+        double closing_price = msg->data->last_price_traded; // Closing price is the last price traded
+        double volume = msg->data->volume_per_tick; // Volume is the last quantity traded
 
-            price_volume_data_.emplace_back(closing_price, volume); // Store the most recent prices & volumes for rolling VWAP calculation
+        price_volume_data_.emplace_back(closing_price, volume); // Store the most recent prices & volumes for rolling VWAP calculation
 
-            if (price_volume_data_.size() > lookback_) // If the lookback period is exceeded, remove the oldest price-volume data
-            {
-                price_volume_data_.erase(price_volume_data_.begin()); // Remove the oldest price-volume data
-            }
+        if (price_volume_data_.size() > lookback_) // If the lookback period is exceeded, remove the oldest price-volume data
+        {
+            price_volume_data_.erase(price_volume_data_.begin()); // Remove the oldest price-volume data
+        }
 
-            double rolling_vwap = calculateVWAP(price_volume_data_); // Calculate the VWAP using the price-volume data (rolling VWAP window)
-            std::cout << "Rolling VWAP: " << rolling_vwap << "\n"; 
+        double rolling_vwap = calculateVWAP(price_volume_data_); // Calculate the VWAP using the price-volume data (rolling VWAP window)
+        std::cout << "Rolling VWAP: " << rolling_vwap << "\n"; 
 
-            if (trader_side_ == Order::Side::BID && msg->data->last_price_traded < rolling_vwap) // If trader is a buyer and price is below VWAP, place BID order
-            {
-                std::cout << "Price below VWAP, placing BID order\n";
-                placeOrder(Order::Side::BID, rolling_vwap);
-            }
-            else if (trader_side_ == Order::Side::ASK && msg->data->last_price_traded > rolling_vwap) // If trader is a seller and price is above VWAP, place ASK order
-            {
-                std::cout << "Price above VWAP, placing ASK order\n";
-                placeOrder(Order::Side::ASK, rolling_vwap);
-            }
+        if (trader_side_ == Order::Side::BID && msg->data->last_price_traded < rolling_vwap) // If trader is a buyer and price is below VWAP, place BID order
+        {
+            std::cout << "Price below VWAP, placing BID order\n";
+            placeOrder(Order::Side::BID, rolling_vwap);
+        }
+        else if (trader_side_ == Order::Side::ASK && msg->data->last_price_traded > rolling_vwap) // If trader is a seller and price is above VWAP, place ASK order
+        {
+            std::cout << "Price above VWAP, placing ASK order\n";
+            placeOrder(Order::Side::ASK, rolling_vwap);
         }
     }
 

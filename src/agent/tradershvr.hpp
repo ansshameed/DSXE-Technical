@@ -63,14 +63,17 @@ public:
         std::cout << "Received market data from " << exchange << "\n";
         //int quantity = 100;
 
-        if (is_trading_) 
-        {   
-            int quantity = getRandomOrderSize(); // Use random order size 
-            double price = getShaverPrice(msg);
-            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!is_trading_) 
+        { 
+            return; 
         }
-        
+        lock.unlock(); 
+ 
+        int quantity = getRandomOrderSize(); // Use random order size 
+        double price = getShaverPrice(msg);
+        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
     }
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
@@ -85,7 +88,7 @@ public:
         //" Qty remaining = " << msg->order->remaining_quantity << "\n";
 
         //Calculate Profitability
-    if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
         {   
             if (msg->trade) { 
                 Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};

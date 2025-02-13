@@ -6,21 +6,25 @@
     </parameters>
     <instances>
         <instance ip="127.0.0.1" port="9999" agent-type="exchange"/>
+        <instance ip="127.0.0.1" port="8080" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8081" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8082" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8083" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8084" agent-type="trader"/>
-        <instance ip="127.0.0.1" port="8085" agent-type="watcher"/>
+        <instance ip="127.0.0.1" port="8085" agent-type="trader"/>
+        <instance ip="127.0.0.1" port="8086" agent-type="watcher"/>
     </instances>
     <agents>
         <exchanges>
             <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="2"/>
         </exchanges>
         <traders>
-            <vwap exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>
+            <rsi exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>
             <zic exchange="NYSE" ticker="AAPL" side="buy" limit="150" delay="0" trade-interval="5"/>
-            <vwap exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
+            <shvr exchange="NYSE" ticker="AAPL" side="buy" limit="50" delay="0" trade-interval="5"/>
+            <rsi exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
             <zic exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
+            <shvr exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="5"/>
         </traders>
         <watchers> 
             <watcher exchange="NYSE" ticker="AAPL"/>

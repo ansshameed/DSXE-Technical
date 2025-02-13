@@ -637,6 +637,13 @@ void StockExchange::endTradingSession()
         // profit_sum here is the aggregated sum for all traders of this type.
         std::cout << "Agent Type: " << agent_name << " Total Profit: " << std::fixed << std::setprecision(0) << profit_sum << "\n";
     }
+
+    // Print individual profits for each agent for debugging purposes
+    std::cout << "Individual Profits:\n";
+    for (const auto& [agent_id, profit] : agent_profits_)
+    {
+        std::cout << "Agent ID: " << agent_id << " Profit: " << std::fixed << std::setprecision(0) << profit << "\n";
+    }
 };
 
 OrderBookPtr StockExchange::getOrderBookFor(std::string_view ticker)
