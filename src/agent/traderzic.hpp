@@ -6,6 +6,9 @@
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
 
+#include <iostream> // to print full profitability
+#include <iomanip>
+
 /** Prototype ZIC trader implementation. */
 class TraderZIC : public TraderAgent
 {
@@ -52,15 +55,21 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
+        is_trading_ = false;
         std::cout << "Trading window ended.\n";
         displayProfitability();
         sendProfitToExchange(); 
-        is_trading_ = false;
         lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!is_trading_) 
+        { 
+            return; 
+        }
+        lock.unlock(); 
         std::cout << "Received market data from " << exchange << "\n";
     }
 
@@ -106,7 +115,7 @@ public:
             }
         }
 
-        std::cout << "Total Profit: " << total_profit_ << "\n";
+        std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n";
         
     }
 

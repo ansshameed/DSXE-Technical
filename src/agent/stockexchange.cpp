@@ -360,7 +360,7 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
             //agent_profits_[msg->agent_id] = msg->profit;
             std::cout << "Individual Profit: Agent ID: " << msg->agent_id 
                   << " Agent Name: " << msg->agent_name 
-                  << " Profit: " << msg->profit << "\n";
+                  << " Profit: " << std::fixed << std::setprecision(0) << msg->profit << "\n";
             total_profits_[msg->agent_name] += msg->profit;
             
             // Determine if agent is buyer or seller (BUYER - negative, SELLER - positive)

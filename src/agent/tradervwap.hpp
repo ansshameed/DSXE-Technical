@@ -40,8 +40,10 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        std::cout << "Trading window ended.\n";
         is_trading_ = false;
+        std::cout << "Trading window ended.\n";
+        displayProfitability();
+        sendProfitToExchange();
         lock.unlock();
     }
 
@@ -49,29 +51,39 @@ public:
     {
         std::cout << "Received market data from " << exchange << "\n";
         std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
-
-        double closing_price = msg->data->last_price_traded; // Closing price is the last price traded
-        double volume = msg->data->volume_per_tick; // Volume is the last quantity traded
-
-        price_volume_data_.emplace_back(closing_price, volume); // Store the most recent prices & volumes for rolling VWAP calculation
-
-        if (price_volume_data_.size() > lookback_) // If the lookback period is exceeded, remove the oldest price-volume data
-        {
-            price_volume_data_.erase(price_volume_data_.begin()); // Remove the oldest price-volume data
+        
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!is_trading_) 
+        { 
+            return; 
         }
+        lock.unlock(); 
 
-        double rolling_vwap = calculateVWAP(price_volume_data_); // Calculate the VWAP using the price-volume data (rolling VWAP window)
-        std::cout << "Rolling VWAP: " << rolling_vwap << "\n"; 
+        if (is_trading_) 
+        { 
+            double closing_price = msg->data->last_price_traded; // Closing price is the last price traded
+            double volume = msg->data->volume_per_tick; // Volume is the last quantity traded
 
-        if (trader_side_ == Order::Side::BID && msg->data->last_price_traded < rolling_vwap) // If trader is a buyer and price is below VWAP, place BID order
-        {
-            std::cout << "Price below VWAP, placing BID order\n";
-            placeOrder(Order::Side::BID, rolling_vwap);
-        }
-        else if (trader_side_ == Order::Side::ASK && msg->data->last_price_traded > rolling_vwap) // If trader is a seller and price is above VWAP, place ASK order
-        {
-            std::cout << "Price above VWAP, placing ASK order\n";
-            placeOrder(Order::Side::ASK, rolling_vwap);
+            price_volume_data_.emplace_back(closing_price, volume); // Store the most recent prices & volumes for rolling VWAP calculation
+
+            if (price_volume_data_.size() > lookback_) // If the lookback period is exceeded, remove the oldest price-volume data
+            {
+                price_volume_data_.erase(price_volume_data_.begin()); // Remove the oldest price-volume data
+            }
+
+            double rolling_vwap = calculateVWAP(price_volume_data_); // Calculate the VWAP using the price-volume data (rolling VWAP window)
+            std::cout << "Rolling VWAP: " << rolling_vwap << "\n"; 
+
+            if (trader_side_ == Order::Side::BID && msg->data->last_price_traded < rolling_vwap) // If trader is a buyer and price is below VWAP, place BID order
+            {
+                std::cout << "Price below VWAP, placing BID order\n";
+                placeOrder(Order::Side::BID, rolling_vwap);
+            }
+            else if (trader_side_ == Order::Side::ASK && msg->data->last_price_traded > rolling_vwap) // If trader is a seller and price is above VWAP, place ASK order
+            {
+                std::cout << "Price above VWAP, placing ASK order\n";
+                placeOrder(Order::Side::ASK, rolling_vwap);
+            }
         }
     }
 
@@ -81,6 +93,15 @@ public:
         {
             last_accepted_order_id_ = msg->order->id;
         }
+
+        // Executed trades for profitability
+        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+        {   
+            if (msg->trade) { 
+                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
+                executed_trades_.push_back(trade);
+            }
+        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
@@ -88,7 +109,39 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void displayProfitability() 
+    { 
+
+        double buyer_profit = 0.0; 
+        double seller_profit = 0.0; 
+
+        // Calculate profit or loss
+        for (const auto& trade : executed_trades_) 
+        { 
+            if (trade.side == Order::Side::ASK) // Sell order 
+            { 
+                seller_profit += trade.price * trade.quantity; 
+            }
+            else if (trade.side == Order::Side::BID) // Buy order 
+            { 
+                buyer_profit -= trade.price * trade.quantity; 
+            }
+        }
+
+        total_profit_ = buyer_profit + seller_profit;
+        std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n"; 
+    }
+
 private:
+
+    void sendProfitToExchange()
+    {
+        ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+        profit_msg->agent_id = this->agent_id;
+        profit_msg->agent_name = agent_name_;
+        profit_msg->profit = total_profit_;
+        sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+    }
 
     void activelyTrade()
     {
@@ -165,6 +218,16 @@ private:
     bool is_trading_ = false;
 
     constexpr static double REL_JITTER = 0.25; // Lower jitter for higher frequency execution
+
+    // Profitability parameters 
+    struct Trade { 
+        double price;
+        int quantity;
+        Order::Side side;
+    }; 
+    std::vector<Trade> executed_trades_; 
+    double total_profit_ = 0.0;
+    std::string agent_name_ = "VWAP";
 };
 
 #endif

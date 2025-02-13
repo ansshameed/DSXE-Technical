@@ -10,6 +10,9 @@
 #include "../utilities/syncqueue.hpp"
 #include "../message/profitmessage.hpp"
 
+#include <iostream> // to print full profitability
+#include <iomanip>
+
 class TraderShaver : public TraderAgent
 {
 public:
@@ -59,6 +62,7 @@ public:
     {   
         std::cout << "Received market data from " << exchange << "\n";
         //int quantity = 100;
+
         if (is_trading_) 
         {   
             int quantity = getRandomOrderSize(); // Use random order size 
@@ -66,6 +70,7 @@ public:
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
             std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
         }
+        
     }
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
@@ -114,7 +119,7 @@ public:
         }
 
         total_profit_ = buyer_profit + seller_profit;
-        std::cout << "Total Profit: " << total_profit_ << "\n"; 
+        std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n"; 
     }
 
 private:
@@ -172,13 +177,12 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
+    std::string agent_name_ = "Shaver";
 
     // Mutex and Actively Trade attributes mechanism
     std::mt19937 random_generator_;
     std::mutex mutex_;
     std::thread* trading_thread_ = nullptr;
-
-    std::string agent_name_ = "Shaver";
 
 };
 
