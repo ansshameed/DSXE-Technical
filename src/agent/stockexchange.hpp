@@ -12,6 +12,7 @@
 #include "../trade/tradefactory.hpp"
 #include "../trade/marketdata.hpp"
 #include "../trade/lobsnapshot.hpp"
+#include "../trade/profitsnapshot.hpp"
 #include "../utilities/syncqueue.hpp"
 #include "../utilities/csvwriter.hpp"
 #include "../utilities/csvprintable.hpp"
@@ -123,6 +124,12 @@ private:
     /** Logs a snapshot of the LOB with selected attributes. */
     void addLOBSnapshot(LOBSnapshotPtr lob_data);
 
+    /** Write profits to CSV file. */
+    void writeProfitsToCSV();
+
+    /** Print profits to stock exchange terminal. */
+    void printProfits();
+
     /** Creates a new message tape CSV file. */
     void createMessageTape();
 
@@ -187,7 +194,9 @@ private:
     std::unordered_map<std::string, CSVWriterPtr> market_data_feeds_;
 
     /** LOB snapshot feed for each ticker traded. */
-    std::unordered_map<std::string, CSVWriterPtr> lob_snapshot_; 
+    std::unordered_map<std::string, CSVWriterPtr> lob_snapshot_;
+
+    std::unordered_map<std::string, CSVWriterPtr> profits_writer_;
 
     /** Message tape for each message received. */
     CSVWriterPtr message_tape_;
@@ -216,6 +225,7 @@ private:
 
     /** Profit attributes. */
     std::unordered_map<int, double> agent_profits_; 
+    std::unordered_map<int, std::string> agent_names_;
     std::mutex profit_mutex_; 
     std::unordered_map<std::string, double> total_profits_;
     std::unordered_map<std::string, double> buyer_profits_;

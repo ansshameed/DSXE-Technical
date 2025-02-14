@@ -4,6 +4,7 @@
 #include "stockexchange.hpp"
 #include "../utilities/syncqueue.hpp"
 #include "../trade/lobsnapshot.hpp" // Include the LOB Snapshot header file
+#include "../trade/profitsnapshot.hpp" // Include the Profit Snapshot header file
 #include "../message/profitmessage.hpp" // Include the Profit Message header file
 
 #include <iostream> // to print full profitability
@@ -372,7 +373,7 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
 
             // Store individual trader agent profits if needed
             agent_profits_[msg->agent_id] = msg->profit;
-
+            agent_names_[msg->agent_id] = msg->agent_name;
             break;
         }
         default:
@@ -445,15 +446,18 @@ void StockExchange::createDataFiles(std::string_view ticker)
     std::string trades_file = "trades_" + suffix + ".csv";
     std::string market_data_file = "data_" + suffix + ".csv";
     std::string lob_snapshot_file = "lob_snapshot_" + suffix + ".csv"; // LOB Snapshot file
+    std::string profits_file = "profits_snapshot_" + suffix + ".csv"; // Profits file
 
     // Create a CSV writers
     CSVWriterPtr trade_writer = std::make_shared<CSVWriter>(trades_file);
     CSVWriterPtr market_data_writer = std::make_shared<CSVWriter>(market_data_file);
     CSVWriterPtr lob_snapshot_writer = std::make_shared<CSVWriter>(lob_snapshot_file); // LOB Snapshot writer
+    CSVWriterPtr profits_writer = std::make_shared<CSVWriter>(profits_file); // Profits writer
 
     trade_tapes_.insert({std::string{ticker}, trade_writer});
     market_data_feeds_.insert({std::string{ticker}, market_data_writer});
     lob_snapshot_.insert({std::string{ticker}, lob_snapshot_writer}); // LOB Snapshot writer (inserted into lob_snapshot_ map)
+    profits_writer_.insert({std::string{ticker}, profits_writer}); // Profits writer (inserted into profits_ map)
 }
 
 void StockExchange::createMessageTape() 
@@ -629,7 +633,15 @@ void StockExchange::endTradingSession()
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
+    // Print profits to stock exchange 
+    printProfits();
 
+    // Write profits to CSV file
+    writeProfitsToCSV();
+};
+
+void StockExchange::printProfits() 
+{ 
     // Print total profits for each agent type
     std::cout << "Total Profits by Agent Type:\n";
     for (const auto& [agent_name, profit_sum] : total_profits_)
@@ -644,7 +656,22 @@ void StockExchange::endTradingSession()
     {
         std::cout << "Agent ID: " << agent_id << " Profit: " << std::fixed << std::setprecision(0) << profit << "\n";
     }
-};
+}
+
+void StockExchange::writeProfitsToCSV()
+{
+    // Iterate through all tickers and write profits to CSV file
+    for (const auto& [ticker, writer] : profits_writer_)
+    {
+        for (const auto& [agent_id, profit] : agent_profits_)
+        {
+            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_id, agent_names_[agent_id], profit);
+            writer->writeRow(profit_snapshot); 
+        }
+        writer->stop();
+    }
+}
+
 
 OrderBookPtr StockExchange::getOrderBookFor(std::string_view ticker)
 {
