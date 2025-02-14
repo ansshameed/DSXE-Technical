@@ -12,21 +12,26 @@ class ProfitSnapshot : public CSVPrintable, std::enable_shared_from_this<ProfitS
     public:
         ProfitSnapshot() = default;
 
-        ProfitSnapshot(int agent_id, std::string agent_name, double profit)
-            : agent_id(agent_id), agent_name(agent_name), profit(profit) {}
+        //ProfitSnapshot(int agent_id, std::string agent_name, double profit)
+            //: agent_id(agent_id), agent_name(agent_name), profit(profit) {}
 
-        int agent_id;
+        ProfitSnapshot(std::string agent_name, double profit)
+            : agent_name(agent_name), profit(profit) {}
+
+        //int agent_id;
         std::string agent_name;
         double profit;
 
         std::string describeCSVHeaders() const override
         {
-            return "agent_id, agent_name, profit"; // CSV headers for the Profit Snapshot
+            //return "agent_id, agent_name, profit"; // CSV headers for the Profit Snapshot
+            return "agent_name, profit"; // CSV headers for the Profit Snapshot
         }
 
         std::string toCSV() const override
         {
-            return std::to_string(agent_id) + ", " + agent_name + ", " + std::to_string(profit);
+            //return std::to_string(agent_id) + ", " + agent_name + ", " + std::to_string(profit);
+            return agent_name + ", " + std::to_string(profit);
         }
 
     private:
@@ -34,7 +39,7 @@ class ProfitSnapshot : public CSVPrintable, std::enable_shared_from_this<ProfitS
         friend std::ostream& operator<<(std::ostream& os, const ProfitSnapshot& data)
         {
             os << "Profit Snapshot:\n" 
-            << "AGENT ID: " << data.agent_id << "\n"
+            //<< "AGENT ID: " << data.agent_id << "\n"
             << "AGENT NAME: " << data.agent_name << "\n"
             << "PROFIT: " << data.profit << "\n";
             return os;
@@ -44,7 +49,7 @@ class ProfitSnapshot : public CSVPrintable, std::enable_shared_from_this<ProfitS
         template<class Archive>
         void serialize(Archive & ar, const unsigned int version)
         {
-            ar & agent_id;
+            //ar & agent_id;
             ar & agent_name;
             ar & profit;
         }

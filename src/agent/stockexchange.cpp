@@ -663,9 +663,10 @@ void StockExchange::writeProfitsToCSV()
     // Iterate through all tickers and write profits to CSV file
     for (const auto& [ticker, writer] : profits_writer_)
     {
-        for (const auto& [agent_id, profit] : agent_profits_)
+        for (const auto& [agent_name, profit_sum] : total_profits_)
         {
-            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_id, agent_names_[agent_id], profit);
+            //ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_id, agent_names_[agent_id], profit);
+            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_name, profit_sum);
             writer->writeRow(profit_snapshot); 
         }
         writer->stop();
