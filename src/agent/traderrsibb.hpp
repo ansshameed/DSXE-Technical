@@ -43,8 +43,10 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        std::cout << "Trading window ended.\n";
         is_trading_ = false;
+        std::cout << "Trading window ended.\n";
+        displayProfitability();
+        sendProfitToExchange();
         lock.unlock();
     }
 
@@ -52,6 +54,13 @@ public:
     {
         std::cout << "Received market data from " << exchange << "\n";
         std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
+
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!is_trading_) 
+        { 
+            return; 
+        }
+        lock.unlock(); 
 
         double last_price = msg->data->last_price_traded;
 
@@ -103,6 +112,15 @@ public:
         {
             last_accepted_order_id_ = msg->order->id; // Store the order ID
         }
+
+        // Executed trades for profitability
+        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+        {   
+            if (msg->trade) { 
+                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
+                executed_trades_.push_back(trade);
+            }
+        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
@@ -110,7 +128,39 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void displayProfitability() 
+    { 
+
+        double buyer_profit = 0.0; 
+        double seller_profit = 0.0; 
+
+        // Calculate profit or loss
+        for (const auto& trade : executed_trades_) 
+        { 
+            if (trade.side == Order::Side::ASK) // Sell order 
+            { 
+                seller_profit += trade.price * trade.quantity; 
+            }
+            else if (trade.side == Order::Side::BID) // Buy order 
+            { 
+                buyer_profit -= trade.price * trade.quantity; 
+            }
+        }
+
+        total_profit_ = buyer_profit + seller_profit;
+        std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n"; 
+    }
+
 private:
+
+    void sendProfitToExchange()
+        {
+            ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+            profit_msg->agent_id = this->agent_id;
+            profit_msg->agent_name = agent_name_;
+            profit_msg->profit = total_profit_;
+            sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+        }
 
     void activelyTrade()
     {
@@ -239,6 +289,16 @@ private:
     std::vector<double> bb_prices_;   // Stores prices for Bollinger Bands calculation
 
     constexpr static double REL_JITTER = 0.25;
+
+    // Profitability parameters 
+    struct Trade { 
+        double price;
+        int quantity;
+        Order::Side side;
+    }; 
+    std::vector<Trade> executed_trades_; 
+    double total_profit_ = 0.0;
+    std::string agent_name_ = "RSI & Bollinger Bands";
 };
 
 #endif

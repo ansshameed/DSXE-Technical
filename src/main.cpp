@@ -53,6 +53,7 @@ std::string showLocalUsage() {
     ss << "Usage: " << "./simulation local" << " <agent> <agent_id> [options]" << "\n\n";
     ss << "Agents:\n";
     ss << "  " << "exchange" << "\t" << "multithreaded stock exchange implementation" << "\n";
+    ss << "  " << "zip" << "\t\t" << "zero intelligence plus trader" << "\n";
     ss << "  " << "watcher" << "\t" << "live market data watcher" << "\n";
     ss << "  " << "zic" << "\t\t" << "zero intelligence constrained trader" << "\n";
     ss << "  " << "shvr" << "\t\t" << "shaver trader" << "\n";
@@ -62,7 +63,7 @@ std::string showLocalUsage() {
     ss << "  " << "bb" << "\t\t" << "bollinger bands trader" << "\n";
     ss << "  " << "vwap" << "\t" << "volume-weighted average price" << "\n";
     ss << "  " << "rsibb" << "\t\t" << " relative strength indicator bollinger bands trader" << "\n";
-    ss << "  " << "obvvwap" << "\t" << "on balance volume volume-weighted average price trader" << "\n\n";
+    ss << "  " << "obvvwap" << "\t" << "on balance volume volume-weighted average price trader" << "\n";
     ss << "\n";
     return ss.str();
 }
@@ -126,7 +127,7 @@ void local_runner(int argc, char** argv)
         std::shared_ptr<MarketDataWatcher> watcher (new MarketDataWatcher{&entity, config});
         entity.setAgent(std::static_pointer_cast<Agent>(watcher));
         entity.start();
-    } 
+    }
     else if (agent_type == "zic") 
     {
         // Create configuration
@@ -142,7 +143,23 @@ void local_runner(int argc, char** argv)
         std::shared_ptr<TraderZIC> trader (new TraderZIC{&entity, config});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
-    } 
+    }
+    else if (agent_type == "zip") 
+    {
+        // Create configuration
+        ZIPConfigPtr config = std::make_shared<ZIPConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+        config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+        config->limit = vm["limit"].as<double>();
+        config->delay = vm["delay"].as<unsigned int>();
+
+        std::shared_ptr<TraderZIP> trader (new TraderZIP{&entity, config});
+        entity.setAgent(std::static_pointer_cast<Agent>(trader));
+        entity.start();
+    }
     else if (agent_type == "shvr")
     {
         // Create configuration

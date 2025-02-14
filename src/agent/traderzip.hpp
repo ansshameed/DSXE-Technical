@@ -58,13 +58,21 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        std::cout << "Trading window ended.\n";
         is_trading_ = false;
+        std::cout << "Trading window ended.\n";
+        displayProfitability();
+        sendProfitToExchange(); 
         lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
-    {
+    {   
+        std::unique_lock<std::mutex> lock(mutex_);
+        if (!is_trading_) 
+        { 
+            return; 
+        }
+        lock.unlock(); 
         reactToMarket(msg);
     }
 
@@ -80,6 +88,15 @@ public:
             last_accepted_order_id_ = std::nullopt;
             next_lower_margin_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         }
+
+        //Calculate Profitability
+        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
+        {   
+            if (msg->trade) { 
+                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
+                executed_trades_.push_back(trade);
+            }
+        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
@@ -87,7 +104,36 @@ public:
 
     }
 
+    void displayProfitability() 
+        { 
+            // Calculate profit or loss
+
+            for (const auto& trade : executed_trades_) 
+            { 
+                if (trade.side == Order::Side::ASK) // Sell order 
+                { 
+                    total_profit_ += trade.price * trade.quantity; 
+                }
+                else if (trade.side == Order::Side::BID) // Buy order 
+                { 
+                    total_profit_ -= trade.price * trade.quantity; 
+                }
+            }
+
+            std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n";
+            
+        }
+
 private:
+
+    void sendProfitToExchange()
+    {
+        ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+        profit_msg->agent_id = this->agent_id;
+        profit_msg->agent_name = agent_name_;
+        profit_msg->profit = total_profit_;
+        sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+    }
 
     void initialiseConstants()
     {
@@ -353,6 +399,16 @@ private:
     constexpr static double REL_JITTER = 0.25;
 
     constexpr static unsigned long MS_TO_NS = 1000000;
+
+    // Profitability parameters 
+    struct Trade { 
+        double price;
+        int quantity;
+        Order::Side side;
+    }; 
+    std::vector<Trade> executed_trades_; 
+    double total_profit_ = 0.0;
+    std::string agent_name_ = "ZIP";
 };
 
 #endif
