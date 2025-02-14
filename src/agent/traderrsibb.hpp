@@ -52,15 +52,16 @@ public:
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
-        std::cout << "Received market data from " << exchange << "\n";
-        std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
-
         std::unique_lock<std::mutex> lock(mutex_);
         if (!is_trading_) 
         { 
             return; 
         }
         lock.unlock(); 
+
+        std::cout << "Received market data from " << exchange << "\n";
+
+        std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
 
         double last_price = msg->data->last_price_traded;
 

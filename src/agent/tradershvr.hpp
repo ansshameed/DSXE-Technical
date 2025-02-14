@@ -60,15 +60,15 @@ public:
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {   
-        std::cout << "Received market data from " << exchange << "\n";
-        //int quantity = 100;
-
         std::unique_lock<std::mutex> lock(mutex_);
         if (!is_trading_) 
         { 
             return; 
         }
         lock.unlock(); 
+        
+        std::cout << "Received market data from " << exchange << "\n";
+        //int quantity = 100;
  
         int quantity = getRandomOrderSize(); // Use random order size 
         double price = getShaverPrice(msg);

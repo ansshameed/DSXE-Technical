@@ -70,6 +70,7 @@ public:
             return; 
         }
         lock.unlock(); 
+        
         std::cout << "Received market data from " << exchange << "\n";
     }
 

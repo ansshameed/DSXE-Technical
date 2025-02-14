@@ -73,6 +73,7 @@ public:
             return; 
         }
         lock.unlock(); 
+        
         reactToMarket(msg);
     }
 
