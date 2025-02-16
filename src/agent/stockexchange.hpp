@@ -25,6 +25,7 @@
 #include "../message/exec_report_message.hpp"
 #include "../message/event_message.hpp"
 #include "../message/cancel_reject_message.hpp"
+#include "../config/simulationconfig.hpp"
 
 class StockExchange : public Agent
 {
@@ -123,6 +124,9 @@ private:
 
     /** Logs a snapshot of the LOB with selected attributes. */
     void addLOBSnapshot(LOBSnapshotPtr lob_data);
+    
+    /** Calculate profits for csv file. */
+    void computeProfits();
 
     /** Write profits to CSV file. */
     void writeProfitsToCSV();
@@ -230,6 +234,9 @@ private:
     std::unordered_map<std::string, double> total_profits_;
     std::unordered_map<std::string, double> buyer_profits_;
     std::unordered_map<std::string, double> seller_profits_;
+
+    /** Simulation config params. */
+    SimulationConfigPtr simulation_config_;
 };
 
 #endif

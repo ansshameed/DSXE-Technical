@@ -10,7 +10,9 @@
         <instance ip="127.0.0.1" port="8081" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8082" agent-type="trader"/>
         <instance ip="127.0.0.1" port="8083" agent-type="trader"/>
-        <instance ip="127.0.0.1" port="8084" agent-type="watcher"/>
+        <instance ip="127.0.0.1" port="8084" agent-type="trader"/>
+        <instance ip="127.0.0.1" port="8085" agent-type="trader"/>
+        <instance ip="127.0.0.1" port="8086" agent-type="watcher"/>
     </instances>
     <agents>
         <exchanges>
@@ -19,8 +21,10 @@
         <traders>
             <shvr exchange="NYSE" ticker="AAPL" side="buy" limit="50" delay="0" trade-interval="1"/>
             <zic exchange="NYSE" ticker="AAPL" side="buy" limit="50" delay="0" trade-interval="1"/>
+            <vwap exchange="NYSE" ticker="AAPL" side="buy" limit="50" delay="0" trade-interval="1"/>
             <shvr exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="1"/>
             <zic exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="1"/>
+            <vwap exchange="NYSE" ticker="AAPL" side="sell" limit="50" delay="0" trade-interval="1"/>
         </traders>
         <watchers> 
             <watcher exchange="NYSE" ticker="AAPL"/>

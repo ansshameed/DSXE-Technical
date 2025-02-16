@@ -3,6 +3,7 @@
 
 #include "agentconfig.hpp"
 #include "../order/order.hpp"
+#include <boost/serialization/base_object.hpp>
 
 class TraderConfig : public AgentConfig
 {
@@ -10,6 +11,7 @@ public:
 
     TraderConfig() = default;
 
+    std::string name; // agent name
     std::string exchange_name;
     std::string exchange_addr;
     std::string ticker;
@@ -26,6 +28,7 @@ private:
     void serialize(Archive & ar, const unsigned int version)
     {
         ar & boost::serialization::base_object<AgentConfig>(*this);
+        ar & name;
         ar & exchange_name;
         ar & exchange_addr;
         ar & ticker;

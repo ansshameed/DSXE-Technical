@@ -43,7 +43,7 @@ public:
         is_trading_ = false;
         std::cout << "Trading window ended.\n";
         displayProfitability();
-        sendProfitToExchange();
+        //sendProfitToExchange();
         lock.unlock();
     }
 
@@ -55,7 +55,7 @@ public:
             return; 
         }
         lock.unlock(); 
-        
+
         std::cout << "Received market data from " << exchange << "\n";
         std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
 
@@ -126,18 +126,14 @@ public:
         }
 
         total_profit_ = buyer_profit + seller_profit;
-        std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n"; 
+        sendProfitToExchange(); 
     }
 
 private:
 
     void sendProfitToExchange()
     {
-        ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
-        profit_msg->agent_id = this->agent_id;
-        profit_msg->agent_name = agent_name_;
-        profit_msg->profit = total_profit_;
-        sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+        std::cout << "[DEBUG] VWAP Trader Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n";
     }
 
     void activelyTrade()

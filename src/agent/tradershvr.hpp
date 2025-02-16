@@ -53,7 +53,7 @@ public:
     {   
         is_trading_ = false;
         displayProfitability();
-        sendProfitToExchange();
+        //sendProfitToExchange();
         std::cout << "Trading window ended.\n";
 
     }
@@ -66,7 +66,7 @@ public:
             return; 
         }
         lock.unlock(); 
-        
+
         std::cout << "Received market data from " << exchange << "\n";
         //int quantity = 100;
  
@@ -122,18 +122,14 @@ public:
         }
 
         total_profit_ = buyer_profit + seller_profit;
-        std::cout << "Total Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n"; 
+        sendProfitToExchange();
     }
 
 private:
 
     void sendProfitToExchange()
         {
-            ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
-            profit_msg->agent_id = this->agent_id;
-            profit_msg->agent_name = agent_name_;
-            profit_msg->profit = total_profit_;
-            sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+            std::cout << "[DEBUG] SHVR Trader Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n";
         }
 
     double getShaverPrice(MarketDataMessagePtr msg)

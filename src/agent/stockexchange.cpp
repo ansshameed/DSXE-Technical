@@ -6,6 +6,7 @@
 #include "../trade/lobsnapshot.hpp" // Include the LOB Snapshot header file
 #include "../trade/profitsnapshot.hpp" // Include the Profit Snapshot header file
 #include "../message/profitmessage.hpp" // Include the Profit Message header file
+#include "../config/simulationconfig.hpp" // Include the Simulation Config header file for profits
 
 #include <iostream> // to print full profitability
 #include <iomanip>
@@ -633,15 +634,19 @@ void StockExchange::endTradingSession()
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // Print profits to stock exchange 
-    printProfits();
-
-    // Write profits to CSV file
-    writeProfitsToCSV();
+    // Profitability 
+    computeProfits(); // Compute profits at end of each trial
+    printProfits(); // Print profits to terminal 
+    writeProfitsToCSV(); // Write profit to CSV 
 };
 
 void StockExchange::printProfits() 
-{ 
+{   
+    std::cout << "DEBUG: Mapping of agent IDs to names:\n";
+    for (const auto& [id, name] : agent_names_) {
+        std::cout << "Agent ID: " << id << " -> '" << name << "'\n";
+    }
+
     // Print total profits for each agent type
     std::cout << "Total Profits by Agent Type:\n";
     for (const auto& [agent_name, profit_sum] : total_profits_)
@@ -656,13 +661,63 @@ void StockExchange::writeProfitsToCSV()
     // Iterate through all tickers and write profits to CSV file
     for (const auto& [ticker, writer] : profits_writer_)
     {
-        for (const auto& [agent_name, profit_sum] : total_profits_)
+        for (const auto& [agent_id, profit] : agent_profits_)
         {
-            //ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_id, agent_names_[agent_id], profit);
-            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_name, profit_sum);
+            std::string agent_name = agent_names_.at(agent_id);
+            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(agent_name, profit);
             writer->writeRow(profit_snapshot); 
         }
         writer->stop();
+    }
+}
+
+void StockExchange::computeProfits()
+{
+    std::unordered_map<int, double> trader_profits; 
+
+    for (const auto& [ticker, trades] : in_memory_trades_) 
+    { 
+        for (const auto& trade : trades) 
+        { 
+            double trade_value = trade->price * trade->quantity; 
+            trader_profits[trade->buyer_id] -= trade_value; // Buyers lose money (cost of buying)
+            trader_profits[trade->seller_id] += trade_value; // Sellers gain money (profit from selling)
+        }
+    }
+
+    // Aggregate profits by trader type 
+    std::unordered_map<std::string, double> aggregated_profits; 
+
+    // Store computed profits 
+    for (const auto & [trader_id, profit]: trader_profits) 
+    {   
+        if (agent_names_.find(trader_id) == agent_names_.end()) {
+            std::cout << " Warning: Trader ID " << trader_id << " not found in agent_names_!\n";
+            continue;  // Skip unknown traders
+        }
+
+        std::string trader_type = agent_names_[trader_id]; 
+
+        if (trader_type.empty()) {
+            std::cout << " Warning: Trader ID " << trader_id << " has an empty name!\n";
+            continue;
+        }
+
+        // Ensure trader type exists in aggregated profits
+        if (aggregated_profits.find(trader_type) == aggregated_profits.end()) 
+        { 
+            aggregated_profits[trader_type] = 0.0;
+        }
+
+        aggregated_profits[trader_type] += profit; 
+
+    }
+
+    std::cout << "Total Profits by Agent Type:\n";
+    for (const auto& [agent_name, profit_sum] : aggregated_profits)
+    {
+        // profit_sum is aggregated sum for all traders of this type
+        std::cout << "Agent Type: " << agent_name << " Total Profit: " << std::fixed << std::setprecision(0) << profit_sum << "\n";
     }
 }
 

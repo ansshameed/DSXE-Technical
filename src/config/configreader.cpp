@@ -16,6 +16,7 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
     pugi::xml_node parameters = simulation.child("parameters");
     int time = parameters.child("time").text().as_int(120); // Default to 120 seconds
     int repetitions = parameters.child("repetitions").text().as_int(1); // Default to 1 repetition
+    
     // Parse through the available instances
     std::vector<std::string> exchange_addrs;
     std::vector<std::string> trader_addrs;
@@ -42,6 +43,9 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         }
     }
 
+    // Store agent name mapping
+    std::unordered_map<int, std::string> agent_names; 
+
     // Parse through the configured agents
     int agent_id = 0;
     pugi::xml_node agents = simulation.child("agents");
@@ -58,19 +62,23 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         exchange_addrs_map.insert({exchange_config->name, exchange_addrs.at(instance_id)});
         exchange_configs.push_back(exchange_config);
         ++instance_id;
-        ++agent_id;
+        ++agent_id; 
     }
 
-    // Other agents
+    // Other agents (Traders) 
     std::vector<AgentConfigPtr> trader_configs;
-
     instance_id = 0;
     pugi::xml_node traders = agents.child("traders");
     for (auto trader : traders.children())
     {
         AgentConfigPtr agent_config = configureAgent(agent_id, trader, trader_addrs.at(instance_id), exchange_addrs_map);
-         
         trader_configs.push_back(agent_config);
+
+        // Store agent name mapping DBEBUG FOR AGENT NAME
+        std::string trader_name = trader.name();
+        std::cout << "Reading trader name: " << trader_name << " for agent ID: " << agent_id << std::endl;
+        agent_names[agent_id] = trader_name; 
+
         ++instance_id;
         ++agent_id;
     }
@@ -91,7 +99,6 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         ++watcher_instance_id;
         ++agent_id;
     }
-
 
     SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs, watcher_configs);
     return simulation_config;
@@ -182,8 +189,10 @@ AgentConfigPtr ConfigReader::configureTrader(int id, pugi::xml_node& xml_node, s
     TraderConfigPtr trader_config = std::make_shared<TraderConfig>();
     trader_config->agent_id = id;
 
-    trader_config->type = trader_type;
+    std::string trader_name = xml_node.name();
+    trader_config->name = trader_name;
 
+    trader_config->type = trader_type;
     trader_config->addr = addr;
     trader_config->exchange_name = std::string{xml_node.attribute("exchange").value()};
     trader_config->exchange_addr = exchange_addrs.at(trader_config->exchange_name);

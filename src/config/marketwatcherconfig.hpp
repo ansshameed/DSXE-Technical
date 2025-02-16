@@ -3,6 +3,7 @@
 
 #include "agentconfig.hpp"
 #include "../order/order.hpp"
+#include <boost/serialization/base_object.hpp>
 
 class MarketWatcherConfig : public AgentConfig
 {

@@ -82,6 +82,7 @@ void local_runner(int argc, char** argv)
         ("side", po::value<std::string>()->default_value(std::string{"buyer"}), "(trader only) set the trader side: buyer or seller")
         ("limit", po::value<double>()->default_value(100), "(trader only) set the limit price of the trader")
         ("exchange-addr", po::value<std::string>()->default_value(std::string{"127.0.0.1:9999"}), "(trader only) set the IPv4 address of the exchange")
+        ("config", po::value<std::string>()->default_value(std::string{"../simulation.xml"}), "set the path to the configuration file")
     ;
 
     po::variables_map vm;
@@ -97,9 +98,12 @@ void local_runner(int argc, char** argv)
     std::string agent_type { argv[2] };
     int agent_id { std::stoi(argv[3]) };
     unsigned short port { vm["port"].as<unsigned short>() };
+    std::string config_filepath { vm["config"].as<std::string>() };
 
     asio::io_context io_context;
     NetworkEntity entity{io_context, std::string{"127.0.0.1"}, port};
+
+    SimulationConfigPtr simulation_config = ConfigReader::readConfig(config_filepath);
 
     if (agent_type == "exchange")
     {
@@ -356,7 +360,7 @@ void orchestrator(int argc, char** argv)
     desc.add_options()
         ("help", "show help message")
         ("port", po::value<unsigned short>()->default_value(8080), "set the port of the orchestrator agent")
-        ("config", po::value<std::string>()->default_value(std::string{"simulation.xml"}, "set the path to the configuration file"))
+        ("config", po::value<std::string>()->default_value(std::string{"simulation.xml"}), "set the path to the configuration file")
     ;
 
     po::variables_map vm;

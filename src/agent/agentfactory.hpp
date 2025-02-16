@@ -5,6 +5,7 @@
 #include "agenttype.hpp"
 #include "../config/agentconfig.hpp"
 
+
 #include "stockexchange.hpp"
 #include "marketdatawatcher.hpp"
 #include "traderzic.hpp"
@@ -32,7 +33,8 @@ public:
         {
             case AgentType::STOCK_EXCHANGE: 
             {
-                std::shared_ptr<Agent> agent (new StockExchange{network_entity, std::static_pointer_cast<ExchangeConfig>(config)});
+                auto exchange_config = std::static_pointer_cast<ExchangeConfig>(config);
+                std::shared_ptr<Agent> agent (new StockExchange{network_entity, exchange_config});
                 return agent;
             }
             case AgentType::MARKET_WATCHER:
