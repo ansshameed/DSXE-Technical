@@ -53,7 +53,6 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
     // Exchanges
     std::unordered_map<std::string, std::string> exchange_addrs_map; 
     std::vector<ExchangeConfigPtr> exchange_configs;
-
     int instance_id = 0;
     pugi::xml_node exchanges = agents.child("exchanges");
     for (auto exchange : exchanges.children())
@@ -65,23 +64,44 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         ++agent_id; 
     }
 
-    // Other agents (Traders) 
-    std::vector<AgentConfigPtr> trader_configs;
-    instance_id = 0;
-    pugi::xml_node traders = agents.child("traders");
-    for (auto trader : traders.children())
-    {
-        AgentConfigPtr agent_config = configureAgent(agent_id, trader, trader_addrs.at(instance_id), exchange_addrs_map);
-        trader_configs.push_back(agent_config);
+    // Get the default exchange name and ticker from exchange name for traders to use. - CHANGE LOGIC FOR MULTIPLE EXCHANGES. 
+    std::string default_exchange_name; 
+    std::string default_ticker;
+    if (!exchange_configs.empty()) {
+        default_exchange_name = exchange_configs.at(0)->name;
+        if (!exchange_configs.at(0)->tickers.empty()) {
+            default_ticker = exchange_configs.at(0)->tickers.at(0);
+        }
+    }
+
+
+    // Traders - XML VERSION for manual allocation in simulation config file. 
+    //std::vector<AgentConfigPtr> trader_configs;
+    //instance_id = 0;
+    //pugi::xml_node traders = agents.child("traders");
+    //for (auto trader : traders.children())
+    //{
+        //AgentConfigPtr agent_config = configureAgent(agent_id, trader, trader_addrs.at(instance_id), exchange_addrs_map);
+        //trader_configs.push_back(agent_config);
 
         // Store agent name mapping DBEBUG FOR AGENT NAME
-        std::string trader_name = trader.name();
-        std::cout << "Reading trader name: " << trader_name << " for agent ID: " << agent_id << std::endl;
-        agent_names[agent_id] = trader_name; 
+        //std::string trader_name = trader.name();
+        //std::cout << "Reading trader name: " << trader_name << " for agent ID: " << agent_id << std::endl;
+        //agent_names[agent_id] = trader_name; 
 
-        ++instance_id;
-        ++agent_id;
+        //++instance_id;
+        //++agent_id;
+    //} 
+
+    // Traders - CSV VERSION for dynamic allocation from markets.csv
+    std::string csv_filepath = "../markets.csv"; // Default path for markets.csv
+    // Use a command-line argument if provided
+    if (filepath.find(".csv") != std::string::npos) { // Check if the filepath is a CSV file
+        csv_filepath = filepath; // Set the CSV filepath
     }
+    std::cout << "Loading trader configurations from " << csv_filepath << "..." << std::endl; // DEBUG
+    SimulationConfigPtr csv_config = readConfigFromCSV(csv_filepath, exchange_addrs_map, agent_id, default_exchange_name, default_ticker); // Read trader configurations from CSV
+    std::vector<AgentConfigPtr> trader_configs = csv_config->traders(); // Get trader configurations from CSV
 
     // Watchers
     std::vector<AgentConfigPtr> watcher_configs;
@@ -184,29 +204,39 @@ ExchangeConfigPtr ConfigReader::configureExchange(int id, pugi::xml_node& xml_no
     return exchange_config;
 }
 
-AgentConfigPtr ConfigReader::configureTrader(int id, pugi::xml_node& xml_node, std::string& addr, std::unordered_map<std::string, std::string>& exchange_addrs, AgentType trader_type)
+AgentConfigPtr ConfigReader::configureTrader(int id, pugi::xml_node& xml_node, 
+    std::string& addr, std::unordered_map<std::string, std::string>& exchange_addrs, 
+    AgentType trader_type)
 {
     TraderConfigPtr trader_config = std::make_shared<TraderConfig>();
     trader_config->agent_id = id;
 
-    std::string trader_name = xml_node.name();
-    trader_config->name = trader_name;
+    //std::string type_tag { xml_node.name() }; // PROFITABILITY XML NAME DEBUG
+    //exchange_config->type = AgentFactory::getAgentTypeForTag(type_tag);
+
+    // FIX: Ensure trader name is set from XML for profitability snapshot recognition identity. 
+    if (xml_node.attribute("name")) {
+        trader_config->name = xml_node.attribute("name").as_string();
+    } else {
+        trader_config->name = "Trader_" + std::to_string(id); // Default Name
+        std::cerr << " Warning: Trader name missing in XML! Assigning default name: " << trader_config->name << std::endl;
+    }
 
     trader_config->type = trader_type;
     trader_config->addr = addr;
-    trader_config->exchange_name = std::string{xml_node.attribute("exchange").value()};
+    trader_config->exchange_name = xml_node.attribute("exchange").as_string();
     trader_config->exchange_addr = exchange_addrs.at(trader_config->exchange_name);
-    trader_config->limit = std::atoi(xml_node.attribute("limit").value());
-    trader_config->delay = std::atoi(xml_node.attribute("delay").value());
-    trader_config->ticker = std::string{xml_node.attribute("ticker").value()};
-    trader_config->trade_interval = std::stoul(xml_node.attribute("trade-interval").value());
+    trader_config->ticker = xml_node.attribute("ticker").as_string();
 
-    std::string cancelling {xml_node.attribute("cancel").value()};
-    trader_config->cancelling = cancelling == "true" ? true : false;
-    
-    std::string side {xml_node.attribute("side").value()};
-    if (side == "buy") trader_config->side = Order::Side::BID;
-    else if (side == "sell") trader_config->side = Order::Side::ASK;
+    trader_config->limit = xml_node.attribute("limit").as_int(50);
+    trader_config->trade_interval = xml_node.attribute("trade-interval").as_int(1);
+    trader_config->delay = xml_node.attribute("delay").as_int(0);
+
+    std::string cancelling = xml_node.attribute("cancel").as_string();
+    trader_config->cancelling = (cancelling == "true");
+
+    std::string side = xml_node.attribute("side").as_string();
+    trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
 
     return std::static_pointer_cast<AgentConfig>(trader_config);
 }
@@ -288,3 +318,135 @@ AgentConfigPtr ConfigReader::configureTraderZIP(int id, pugi::xml_node& xml_node
 
 }
 
+AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& addr, 
+    const std::string& exchange, 
+    const std::string& ticker, 
+    AgentType trader_type, 
+    const std::string& side, 
+    const std::unordered_map<std::string, std::string>& exchange_addrs_map)
+{
+    TraderConfigPtr trader_config = std::make_shared<TraderConfig>();
+    trader_config->agent_id = id;
+    trader_config->addr = addr;
+    trader_config->type = trader_type;
+    trader_config->exchange_name = exchange;
+
+    // Dynamically extract `exchange_addr` from `exchange_addrs_map` (DEFINED IN XML). 
+    if (exchange_addrs_map.find(exchange) == exchange_addrs_map.end()) {
+        throw std::runtime_error("Exchange address not found for " + exchange);
+    }
+    trader_config->exchange_addr = exchange_addrs_map.at(exchange);
+
+    trader_config->ticker = ticker;
+    trader_config->limit = 50;  // Default limit value
+    trader_config->delay = 0;   // Default delay value
+    trader_config->trade_interval = 1; // Default interval value
+    trader_config->cancelling = false; // Default
+
+    // Assign Name Based on ID. 
+    trader_config->name = "Trader_" + std::to_string(id);
+
+    // Set buy or sell side for each trader. 
+    trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
+
+    // DEBUG - Print Trader Configuration
+    std::cout << "Configuring CSV Trader: ID=" << trader_config->agent_id
+              << ", Name=" << trader_config->name
+              << ", Exchange=" << trader_config->exchange_name
+              << ", Exchange Addr=" << trader_config->exchange_addr
+              << ", Ticker=" << trader_config->ticker
+              << ", Limit=" << trader_config->limit
+              << ", Trade Interval=" << trader_config->trade_interval
+              << ", Delay=" << trader_config->delay
+              << ", Side=" << side
+              << "\n";
+    
+    return std::static_pointer_cast<AgentConfig>(trader_config);
+}
+
+SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath, 
+    const std::unordered_map<std::string, std::string>& exchange_addrs_map, int& agent_id, const std::string& default_exchange_name, const std::string& default_ticker)
+{
+    std::ifstream file(filepath); // Open CSV file
+    if (!file.is_open()) // Check if file is open
+    {
+        throw std::runtime_error("Failed to open CSV file: " + filepath);
+    }
+
+    std::vector<AgentConfigPtr> trader_configs;
+    std::vector<ExchangeConfigPtr> exchange_configs;
+    std::vector<AgentConfigPtr> watcher_configs;
+
+    if (exchange_addrs_map.empty()) { // Check if exchange addresses map is empty
+        throw std::runtime_error("No exchange addresses found in XML.");
+    }
+
+    int port = 8100; // Start assigning trader ports from 8100
+
+    // These are the expected trader types (exactly 9 values).
+    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb"};
+    std::unordered_map<std::string, AgentType> agent_type_map = {
+        {"zic", AgentType::TRADER_ZIC}, 
+        {"shvr", AgentType::TRADER_SHVR},
+        {"vwap", AgentType::TRADER_VWAP},
+        {"bb", AgentType::TRADER_BOLLINGER_BANDS},
+        {"macd", AgentType::TRADER_MACD},
+        {"obvd", AgentType::TRADER_OBV_DELTA},
+        {"obvvwap", AgentType::TRADER_OBV_VWAP},
+        {"rsi", AgentType::TRADER_RSI},
+        {"rsibb", AgentType::TRADER_RSI_BB}
+    };
+
+    // Use default exchange name and ticker from XML - WORKS ONLY FOR ONE EXCHANGE; CHANGE FOR ARBITRAGE. 
+    if (default_exchange_name.empty() || default_ticker.empty()) {
+        throw std::runtime_error("No default exchange or ticker defined in XML.");
+    }
+
+    std::string line;
+    while (std::getline(file, line)) // Read each line from the CSV file
+    {
+        std::istringstream ss(line);
+        std::string token;
+        std::vector<std::string> tokens;
+        while (std::getline(ss, token, ',')) // Split each line by comma
+        {
+            tokens.push_back(token);
+        }
+
+        // Validate exactly 9 agents (tokens). 
+        if (tokens.size() != 9) {
+            throw std::runtime_error("Invalid CSV format: each line must contain exactly 9 comma-separated values.");
+        }
+
+        // Process each token
+        for (size_t index = 0; index < tokens.size(); ++index)
+        {
+            int count = std::stoi(tokens[index]); // Convert token to integer
+
+            // Validate that each value is between 0 and 5. (0-5 buyers + sellers per agent type)
+            if (count < 0 || count > 5) {
+                throw std::runtime_error("Invalid value in CSV: each value must be between 0 and 5.");
+            }
+
+            std::string trader_type = trader_types[index]; // Get trader type from index
+            AgentType type = agent_type_map[trader_type]; // Get agent type from trader type
+
+            // For each count, create both buyer and seller agents.
+            for (int i = 0; i < count; ++i)
+            {
+                for (const std::string& side : {"buy", "sell"}) // Create buyer and seller agents
+                {   
+                    std::cout << "Assigning trader " << agent_id << " to port " << port << std::endl;
+                    std::string addr = "127.0.0.1:" + std::to_string(port++);
+                    trader_configs.push_back(configureTraderFromCSV(
+                        agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map
+                    ));
+                }
+            }
+        }
+    }
+
+    file.close();
+    
+    return std::make_shared<SimulationConfig>(1, 30, exchange_configs, trader_configs, watcher_configs);
+}

@@ -394,7 +394,8 @@ void StockExchange::handleBroadcastFrom(std::string_view sender, MessagePtr mess
 
 
 void StockExchange::onSubscribe(SubscribeMessagePtr msg)
-{
+{   
+    std::cout << "Subscription received: Agent " << msg->sender_id << " subscribed to " << msg->ticker << " at address " << msg->address << "\n"; // DEBUG ONLY
     if (order_books_.contains(std::string{msg->ticker}))
     {
         std::cout << "Subscription address: " << msg->address << " Agent ID: " << msg->sender_id << "\n";
@@ -540,6 +541,10 @@ double StockExchange::calculateSmithsAlpha(std::string_view ticker)
 void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side)
 {
     MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData(aggressing_side);
+    if (!data) { // DEBUG  
+        std::cout << "No market data available for " << ticker << "\n";
+        return;
+    }
     addMarketDataSnapshot(data); // Existing market data snapshot (data_ files)
 
     double p_equilibrium = calculatePEquilibrium(ticker); // Calculate the equilibrium price

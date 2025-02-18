@@ -19,8 +19,16 @@ public:
     /** Reads the given XML configuration file and returns the list of agent configs. */
     static SimulationConfigPtr readConfig(std::string& filepath);
 
-    /** Configures the agent based on the XML tag. */
+    /** Reads markets.csv for dynamic trader agent allocation. */
+    static SimulationConfigPtr readConfigFromCSV(const std::string& filepath, const std::unordered_map<std::string, std::string>& exchange_addrs_map, int& agent_id, const std::string& default_exchange_name, const std::string& default_ticker);
+
+    /** Configures the agent based on the XML tag. - LEAVE THIS HERE IN CASE OF MANUAL SIMULATION CONFIG ALLOCATION. */
     static AgentConfigPtr configureAgent(int id, pugi::xml_node& xml_node, std::string& addr, std::unordered_map<std::string, std::string>& exchange_addr);
+
+    /** Configures agent dynamically based on CVS */
+    static AgentConfigPtr configureTraderFromCSV(int id, const std::string& addr, const std::string& exchange, const std::string& ticker, AgentType trader_type, const std::string& side, const std::unordered_map<std::string, std::string>& exchange_addrs_map); 
+    
+    
 
 private:
 

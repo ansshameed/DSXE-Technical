@@ -133,7 +133,25 @@ std::pair<std::string, unsigned int> NetworkEntity::splitAddress(std::string_vie
 {
     std::string address_str{address};
     size_t colon_pos = address_str.find(':');
-    return {address_str.substr(0, colon_pos), std::stoi(address_str.substr(colon_pos + 1))};
+
+    // Failover mechanism for invalid address format
+    if (colon_pos == std::string::npos) { // If colon not found
+        throw std::runtime_error("Invalid address format (missing ':') in: " + address_str); // Throw error
+    }
+
+    std::string ip = address_str.substr(0, colon_pos); // Extract IP address
+    std::string port_str = address_str.substr(colon_pos + 1); // Extract port number
+
+    if (port_str.empty()) { // If port number is empty
+        throw std::runtime_error("Invalid address format (empty port) in: " + address_str); // Throw error
+    }
+
+    try { // Try to convert port number to integer
+        unsigned int port = std::stoi(port_str); // Convert port number to integer
+        return {ip, port}; // Return IP address and port number
+    } catch (const std::exception& e) { // Catch any exceptions
+        throw std::runtime_error("Invalid port number in address: " + address_str + " (" + e.what() + ")"); // Throw error
+    }
 }
 
 void NetworkEntity::addConnection(std::string_view address, unsigned int port, TCPConnectionPtr connection)
