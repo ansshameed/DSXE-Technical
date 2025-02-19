@@ -620,7 +620,6 @@ void StockExchange::endTradingSession()
 
     // Profitability 
     computeProfits(); // Compute profits at end of each trial
-    printProfits(); // Print profits to terminal 
     writeProfitsToCSV(); // Write profit to CSV 
 };
 
@@ -677,29 +676,24 @@ void StockExchange::computeProfits()
                   << " | Profit: " << std::fixed << std::setprecision(2) << cash 
                   << "\n";
     }
-}
 
-
-
-void StockExchange::printProfits() 
-{   
-    std::cout << "Total Profits by Trader Name (Sorted):\n";
-
-    // **Ensure all trader types have an entry**
-    for (const auto& [agent_id, agent_name] : agent_names_)
-    {
-        if (agent_profits_by_name_.find(agent_name) == agent_profits_by_name_.end()) {
-            agent_profits_by_name_[agent_name] = 0.0;  // Assign 0 profit if not found
-        }
+    // Aggregate profits by trader name using the agent_names_ mapping.
+    // Clear any previous aggregation.
+    agent_profits_by_name_.clear();
+    for (const auto& [trader_id, profit] : agent_profits_) {
+        // Look up the agent name; if not found, fall back to the trader_id as a string.
+        std::string traderName = (agent_names_.count(trader_id)) ? agent_names_[trader_id] : std::to_string(trader_id);
+        agent_profits_by_name_[traderName] += profit;
     }
 
-    // **Sort profits alphabetically by trader name**
+    // Print the aggregated profits by trader name.
+    std::cout << "Total Profits by Trader Name (Aggregated):\n";
+    // Create a vector to sort the aggregated results alphabetically by trader name.
     std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
-    std::sort(sorted_profits.begin(), sorted_profits.end());
+    std::sort(sorted_profits.begin(), sorted_profits.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
 
-    // **Print total profit per trader type**
-    for (const auto& [trader_name, profit] : sorted_profits)
-    {
+    for (const auto& [trader_name, profit] : sorted_profits) {
         std::cout << "Trader Name: " << trader_name 
                   << " | Total Profit: " << std::fixed << std::setprecision(0) << profit 
                   << "\n";
@@ -708,21 +702,21 @@ void StockExchange::printProfits()
 
 void StockExchange::writeProfitsToCSV()
 {
+    // Aggregate profits from each trader ID into trader type.
+    agent_profits_by_name_.clear();
+    for (const auto& [agent_id, profit] : agent_profits_) {
+        std::string agentName = (agent_names_.count(agent_id)) ? agent_names_[agent_id] : std::to_string(agent_id);
+        agent_profits_by_name_[agentName] += profit;
+    }
+
+    // Sort the aggregated results alphabetically by trader name.
+    std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
+    std::sort(sorted_profits.begin(), sorted_profits.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    // Write the aggregated profits to CSV for each ticker.
     for (const auto& [ticker, writer] : profits_writer_)
     {
-        // **Ensure all trader types are included in the CSV, even if their profit is zero**
-        for (const auto& [agent_id, agent_name] : agent_names_)
-        {
-            if (agent_profits_by_name_.find(agent_name) == agent_profits_by_name_.end()) {
-                agent_profits_by_name_[agent_name] = 0.0;  // Assign default zero profit
-            }
-        }
-
-        // **Sort profits before writing to CSV**
-        std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
-        std::sort(sorted_profits.begin(), sorted_profits.end());
-
-        // **Write profits to CSV**
         for (const auto& [trader_name, profit] : sorted_profits)
         {
             ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(trader_name, profit);
@@ -732,9 +726,6 @@ void StockExchange::writeProfitsToCSV()
         writer->stop();
     }
 }
-
-
-
 
 OrderBookPtr StockExchange::getOrderBookFor(std::string_view ticker)
 {
