@@ -57,16 +57,17 @@ public:
 
     std::string describeCSVHeaders() const override
     {
-        return "sender_id,timestamp_sent,timestamp_received,timestamp_processed";
+        return "sender_id,agent_name,timestamp_sent,timestamp_received,timestamp_processed";
     }
 
     std::string toCSV() const override
     {
-        return std::to_string(sender_id) + ","  + std::to_string(timestamp_sent) + "," + std::to_string(timestamp_received) + "," + std::to_string(timestamp_processed);
+        return std::to_string(sender_id) + ","  + agent_name + "," + std::to_string(timestamp_sent) + "," + std::to_string(timestamp_received) + "," + std::to_string(timestamp_processed);
     }
 
     MessageType type;
     int sender_id;
+    std::string agent_name; 
     unsigned long long timestamp_sent;
     unsigned long long timestamp_received;
     unsigned long long timestamp_processed;
@@ -80,6 +81,7 @@ private:
         ar & boost::serialization::base_object<CSVPrintable>(*this);
         ar & type;
         ar & sender_id;
+        ar & agent_name;
         ar & timestamp_sent;
         ar & timestamp_received;
         ar & timestamp_processed;

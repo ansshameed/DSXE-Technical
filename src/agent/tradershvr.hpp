@@ -23,7 +23,8 @@ public:
       ticker_{config->ticker},
       trader_side_{config->side},
       limit_price_{config->limit}
-    {
+    {   
+
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -32,6 +33,8 @@ public:
         // Add delayed start
         addDelayedStart(config->delay);
     }
+
+    std::string getAgentName() const override { return "SHVR"; }
 
     void terminate() override
     {
@@ -176,7 +179,6 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
-    std::string agent_name_ = "Shaver";
 
     // Mutex and Actively Trade attributes mechanism
     std::mt19937 random_generator_;

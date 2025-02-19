@@ -19,7 +19,7 @@ int main() {
 
     while (std::getline(file, line)) {
         std::stringstream ss(line);
-        std::string id, ticker, quantity, price, timestamp, buyer_id, seller_id, aggressing_order_id, resting_order_id, buyer_priv_value, seller_priv_value;
+        std::string id, ticker, quantity, price, timestamp, buyer_id, seller_id, agent_name, aggressing_order_id, resting_order_id, buyer_priv_value, seller_priv_value;
 
         std::getline(ss, id, ',');
         std::getline(ss, ticker, ',');
@@ -28,6 +28,7 @@ int main() {
         std::getline(ss, timestamp, ',');
         std::getline(ss, buyer_id, ',');
         std::getline(ss, seller_id, ',');
+        std::getline(ss, agent_name, ',');
         std::getline(ss, aggressing_order_id, ',');
         std::getline(ss, resting_order_id, ',');
         std::getline(ss, buyer_priv_value, ',');

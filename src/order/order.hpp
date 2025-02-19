@@ -80,6 +80,7 @@ public:
     int id;
     int client_order_id;
     int sender_id;
+    std::string agent_name; 
     Order::Type type;
     Order::TimeInForce time_in_force;
     std::string ticker;

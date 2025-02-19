@@ -21,14 +21,18 @@ public:
         if (aggressing_order->side == Order::Side::BID)
         {
             trade->buyer_id = aggressing_order->sender_id;
+            trade->buyer_name = aggressing_order->agent_name; 
             trade->seller_id = resting_order->sender_id;
+            trade->seller_name = resting_order->agent_name; 
             trade->buyer_priv_value = aggressing_order->priv_value;
             trade->seller_priv_value = resting_order->priv_value;
         }
         else
         {
             trade->buyer_id = resting_order->sender_id;
+            trade->buyer_name = resting_order->agent_name;
             trade->seller_id = aggressing_order->sender_id;
+            trade->seller_name = aggressing_order->agent_name;
             trade->buyer_priv_value = resting_order->priv_value;
             trade->seller_priv_value = aggressing_order->priv_value;
         }
@@ -50,14 +54,18 @@ public:
         if (aggressing_order->side == Order::Side::BID)
         {
             trade->buyer_id = aggressing_order->sender_id;
+            trade->buyer_name = aggressing_order->agent_name;
             trade->seller_id = resting_order->sender_id;
+            trade->seller_name = resting_order->agent_name; 
             trade->buyer_priv_value = aggressing_order->priv_value;
             trade->seller_priv_value = resting_order->priv_value;
         }
         else
         {
             trade->buyer_id = resting_order->sender_id;
+            trade->buyer_name = resting_order->agent_name; 
             trade->seller_id = aggressing_order->sender_id;
+            trade->seller_name = aggressing_order->agent_name;
             trade->buyer_priv_value = resting_order->priv_value;
             trade->seller_priv_value = aggressing_order->priv_value;
         }

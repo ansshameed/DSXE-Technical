@@ -94,11 +94,14 @@ void TraderAgent::handleBroadcastFrom(std::string_view sender, MessagePtr messag
     }
 }
 
+std::string TraderAgent::getAgentName() const { return agent_name_; }
+
 void TraderAgent::subscribeToMarket(std::string_view exchange, std::string_view ticker)
 {
     SubscribeMessagePtr msg = std::make_shared<SubscribeMessage>();
     msg->ticker = std::string{ticker};
     msg->address = myAddr() + std::string{":"} + std::to_string(myPort());
+    msg->agent_name = this->agent_name_; 
 
     Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
 }
@@ -114,7 +117,7 @@ int TraderAgent::getRandomOrderSize()
     static std::mt19937 gen(rd());
 
     // Uniform distribution
-    std::uniform_int_distribution<> dist(base_quantity, max_quantity);
+std::uniform_int_distribution<> dist(base_quantity, max_quantity);
 
     return dist(gen); 
 }
@@ -129,6 +132,7 @@ void TraderAgent::placeLimitOrder(std::string_view exchange, Order::Side side, s
     msg->side = side;
     msg->priv_value = priv_value;
     msg->time_in_force = time_in_force;
+    msg->agent_name = getAgentName();
 
     Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
 }
@@ -140,6 +144,7 @@ void TraderAgent::placeMarketOrder(std::string_view exchange, Order::Side side, 
     msg->quantity = quantity;
     msg->side = side;
     msg->priv_value = priv_value;
+    msg->agent_name = getAgentName(); 
 
     Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
 }
@@ -150,6 +155,7 @@ void TraderAgent::cancelOrder(std::string_view exchange, Order::Side side, std::
     msg->order_id = order_id;
     msg->ticker = std::string{ticker};
     msg->side = side;
+    msg->agent_name = getAgentName(); 
 
     Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
 }

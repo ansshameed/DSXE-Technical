@@ -20,7 +20,7 @@ public:
       trade_interval_ms_{config->trade_interval},
       random_generator_{std::random_device{}()},
       mutex_{}
-    {
+    {   
         // Connect to exchange and subscribe to market data
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -29,6 +29,8 @@ public:
         // Start with a delayed execution
         addDelayedStart(config->delay);
     }
+
+    std::string getAgentName() const override { return "VWAP"; }
 
     void onTradingStart() override
     {
@@ -220,7 +222,6 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
-    std::string agent_name_ = "VWAP";
 };
 
 #endif

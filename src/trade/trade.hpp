@@ -31,6 +31,8 @@ public:
     unsigned long long timestamp = 0;
     int buyer_id;
     int seller_id;
+    std::string buyer_name;
+    std::string seller_name;
     int aggressing_order_id;
     int resting_order_id;
     double buyer_priv_value;
@@ -39,12 +41,12 @@ public:
 
     std::string describeCSVHeaders() const override
     {
-        return "id,ticker,quantity,price,timestamp,buyer_id,seller_id,aggressing_order_id,resting_order_id,buyer_priv_value,seller_priv_value";
+        return "id,ticker,quantity,price,timestamp,buyer_id,seller_id,buyer_name,seller_name,aggressing_order_id,resting_order_id,buyer_priv_value,seller_priv_value";
     }
 
     std::string toCSV() const override
     {
-        return std::to_string(id) + "," + ticker + "," + std::to_string(quantity) + "," + std::to_string(price) + "," + std::to_string(timestamp) + "," + std::to_string(buyer_id) + "," + std::to_string(seller_id) + "," + std::to_string(aggressing_order_id) + "," + std::to_string(resting_order_id) + "," + std::to_string(buyer_priv_value) + "," + std::to_string(seller_priv_value);
+        return std::to_string(id) + "," + ticker + "," + std::to_string(quantity) + "," + std::to_string(price) + "," + std::to_string(timestamp) + "," + std::to_string(buyer_id) + "," + std::to_string(seller_id) + "," + buyer_name + "," + seller_name + "," + std::to_string(aggressing_order_id) + "," + std::to_string(resting_order_id) + "," + std::to_string(buyer_priv_value) + "," + std::to_string(seller_priv_value);
     }
 
 private:
@@ -61,6 +63,8 @@ private:
         ar & timestamp;
         ar & buyer_id;
         ar & seller_id;
+        ar & buyer_name;
+        ar & seller_name;
         ar & aggressing_order_id;
         ar & resting_order_id;
         ar & buyer_priv_value;
@@ -69,7 +73,7 @@ private:
 
     friend std::ostream& operator<<(std::ostream& os, const Trade& trade)
     {
-        os << trade.timestamp << " [Trade] Id: " << trade.id << " " << trade.ticker << " " << trade.quantity << " @ $" << trade.price << " Buyer: " << trade.buyer_id << " Seller: " << trade.seller_id;
+        os << trade.timestamp << " [Trade] Id: " << trade.id << " " << trade.ticker << " " << trade.quantity << " @ $" << trade.price << " Buyer: " << trade.buyer_id << " Seller: " << trade.seller_id << " Buyer Name: " << trade.buyer_name << " Seller Name: " << trade.seller_name;
         return os;
     }
 };

@@ -49,6 +49,11 @@ public:
     /** Returns a random price for the order. */
     int getRandomOrderSize();
 
+    std::string agent_name_; 
+    
+    virtual std::string getAgentName() const;
+
+
 protected:
 
     /** Derived classes must implement these: */
@@ -67,6 +72,7 @@ protected:
 
     /** The callback function called when the cancel order message is rejected. */
     virtual void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) = 0;
+
 
 private:
 

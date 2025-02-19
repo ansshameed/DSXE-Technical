@@ -24,7 +24,8 @@ public:
       trade_interval_ms_{config->trade_interval},
       random_generator_{std::random_device{}()},
       mutex_{}
-    {
+    {   
+
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -33,6 +34,8 @@ public:
         // Add delayed start
         addDelayedStart(config->delay);
     }
+
+    std::string getAgentName() const override { return "ZIC"; }
 
     /** Gracefully terminates the trader, freeing all memory. */
     void terminate() override
@@ -215,7 +218,6 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
-    std::string agent_name_ = "ZIC";
 
 };
 
