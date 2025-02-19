@@ -352,31 +352,6 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
             onSubscribe(msg);
             break;
         }
-        case MessageType::PROFIT:
-        {
-            ProfitMessagePtr msg = std::dynamic_pointer_cast<ProfitMessage>(message);
-            if (msg == nullptr) {
-                throw std::runtime_error("Failed to cast message to ProfitMessage");
-            }
-            std::unique_lock<std::mutex> lock(profit_mutex_);
-            //agent_profits_[msg->agent_id] = msg->profit;
-            std::cout << "Individual Profit: Agent ID: " << msg->agent_id 
-                  << " Agent Name: " << msg->agent_name 
-                  << " Profit: " << std::fixed << std::setprecision(0) << msg->profit << "\n";
-            total_profits_[msg->agent_name] += msg->profit;
-            
-            // Determine if agent is buyer or seller (BUYER - negative, SELLER - positive)
-            if (msg->profit > 0) {
-                seller_profits_[msg->agent_name] += msg->profit;
-            } else {
-                buyer_profits_[msg->agent_name] += msg->profit;
-            }
-
-            // Store individual trader agent profits if needed
-            agent_profits_[msg->agent_id] = msg->profit;
-            agent_names_[msg->agent_id] = msg->agent_name;
-            break;
-        }
         default:
         {   
             // Send message to the matching engine
@@ -396,9 +371,13 @@ void StockExchange::handleBroadcastFrom(std::string_view sender, MessagePtr mess
 void StockExchange::onSubscribe(SubscribeMessagePtr msg)
 {   
     std::cout << "Subscription received: Agent " << msg->sender_id << " subscribed to " << msg->ticker << " at address " << msg->address << "\n"; // DEBUG ONLY
+
+    agent_names_[msg->sender_id] = msg->agent_name;
+    std::cout << "Agent " << msg->sender_id << " is " << msg->agent_name << "\n"; // DEBUG ONLY
+
     if (order_books_.contains(std::string{msg->ticker}))
     {
-        std::cout << "Subscription address: " << msg->address << " Agent ID: " << msg->sender_id << "\n";
+        std::cout << "Subscription received: Agent " << msg->sender_id << " (" << msg->agent_name << ") subscribed to " << msg->ticker << " at address " << msg->address << "\n";
         addSubscriber(msg->ticker, msg->sender_id, msg->address);
     }
     else
@@ -647,88 +626,114 @@ void StockExchange::endTradingSession()
 
 void StockExchange::computeProfits()
 {
-    std::unordered_map<int, double> trader_profits;
+    std::unordered_map<int, double> trader_cash; 
+    std::unordered_map<int, std::vector<std::pair<double, int>>> trader_inventory;
 
-    // Compute actual trader profits based on executed trades
-    for (const auto& [ticker, trades] : in_memory_trades_)
-    {
-        for (const auto& trade : trades)
-        {
+    for (const auto& [ticker, trades] : in_memory_trades_) {
+        for (const auto& trade : trades) {
+
             double trade_value = trade->price * trade->quantity;
-            trader_profits[trade->buyer_id] -= trade_value; // Buyers lose money (cost of buying)
-            trader_profits[trade->seller_id] += trade_value; // Sellers gain money (profit from selling)
+
+            // Buyer: record the purchase.
+            trader_inventory[trade->buyer_id].push_back({trade->price, trade->quantity});
+            trader_cash[trade->buyer_id] -= trade_value;
+
+            // Seller: process sale.
+            int quantity_to_sell = trade->quantity;
+            double total_cost = 0.0; // Total cost of shares being sold
+
+            while (quantity_to_sell > 0 && !trader_inventory[trade->seller_id].empty()) {
+                auto& buy_record = trader_inventory[trade->seller_id].front();
+                double buy_price = buy_record.first;
+                int available_qty = buy_record.second;
+
+                int qty_to_sell = std::min(quantity_to_sell, available_qty);
+                total_cost += qty_to_sell * buy_price;
+                quantity_to_sell -= qty_to_sell;
+                buy_record.second -= qty_to_sell;
+
+                if (buy_record.second == 0) {
+                    trader_inventory[trade->seller_id].erase(
+                        trader_inventory[trade->seller_id].begin()
+                    );
+                }
+            }
+
+            // Revenue from sale.
+            double revenue = trade->price * trade->quantity;
+            // Profit is revenue minus the cost of the shares sold.
+            double profit = revenue - total_cost;
+
+            // Update the seller’s cash with the profit.
+            trader_cash[trade->seller_id] += profit;
         }
     }
 
-    // Store computed profits
-    for (const auto& [trader_id, profit] : trader_profits)
-    {
-        agent_profits_[trader_id] = profit;
-    }
-
-    // **Ensure all agents exist in `agent_profits_`, even if they haven't traded**
-    for (const auto& [agent_id, agent_name] : agent_names_)
-    {
-        if (agent_profits_.find(agent_id) == agent_profits_.end()) 
-        {
-            agent_profits_[agent_id] = 0.0;  // Explicitly set to zero profit
-        }
-    }
-}
-
-
-void StockExchange::printProfits() 
-{   
-    std::cout << "Total Profits by Agent ID (Sorted):\n";
-
-    // **Ensure all agents have an entry**
-    for (const auto& [agent_id, agent_name] : agent_names_)
-    {
-        if (agent_profits_.find(agent_id) == agent_profits_.end()) {
-            agent_profits_[agent_id] = 0.0;  // Assign 0 profit if not found
-        }
-    }
-
-    // **Sort profits by Agent ID**
-    std::vector<std::pair<int, double>> sorted_profits(agent_profits_.begin(), agent_profits_.end());
-    std::sort(sorted_profits.begin(), sorted_profits.end());
-
-    // **Print all agent profits**
-    for (const auto& [agent_id, profit] : sorted_profits)
-    {
-        std::cout << "Agent ID: " << agent_id 
-                  << " Total Profit: " << std::fixed << std::setprecision(0) << profit 
+    // Now print out the computed profits by trader ID.
+    std::cout << "Trader Profits by ID:\n";
+    for (const auto& [trader_id, cash] : trader_cash) {
+        agent_profits_[trader_id] = cash;
+        std::cout << "Trader ID: " << trader_id 
+                  << " | Profit: " << std::fixed << std::setprecision(2) << cash 
                   << "\n";
     }
 }
 
 
+
+void StockExchange::printProfits() 
+{   
+    std::cout << "Total Profits by Trader Name (Sorted):\n";
+
+    // **Ensure all trader types have an entry**
+    for (const auto& [agent_id, agent_name] : agent_names_)
+    {
+        if (agent_profits_by_name_.find(agent_name) == agent_profits_by_name_.end()) {
+            agent_profits_by_name_[agent_name] = 0.0;  // Assign 0 profit if not found
+        }
+    }
+
+    // **Sort profits alphabetically by trader name**
+    std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
+    std::sort(sorted_profits.begin(), sorted_profits.end());
+
+    // **Print total profit per trader type**
+    for (const auto& [trader_name, profit] : sorted_profits)
+    {
+        std::cout << "Trader Name: " << trader_name 
+                  << " | Total Profit: " << std::fixed << std::setprecision(0) << profit 
+                  << "\n";
+    }
+}
+
 void StockExchange::writeProfitsToCSV()
 {
     for (const auto& [ticker, writer] : profits_writer_)
     {
-        // **Ensure all agent IDs are included in the CSV, even if their profit is zero**
+        // **Ensure all trader types are included in the CSV, even if their profit is zero**
         for (const auto& [agent_id, agent_name] : agent_names_)
         {
-            if (agent_profits_.find(agent_id) == agent_profits_.end()) {
-                agent_profits_[agent_id] = 0.0;  // Assign default zero profit
+            if (agent_profits_by_name_.find(agent_name) == agent_profits_by_name_.end()) {
+                agent_profits_by_name_[agent_name] = 0.0;  // Assign default zero profit
             }
         }
 
         // **Sort profits before writing to CSV**
-        std::vector<std::pair<int, double>> sorted_profits(agent_profits_.begin(), agent_profits_.end());
+        std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
         std::sort(sorted_profits.begin(), sorted_profits.end());
 
         // **Write profits to CSV**
-        for (const auto& [agent_id, profit] : sorted_profits)
+        for (const auto& [trader_name, profit] : sorted_profits)
         {
-            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(std::to_string(agent_id), profit);
+            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(trader_name, profit);
             writer->writeRow(profit_snapshot);
         }
 
         writer->stop();
     }
 }
+
+
 
 
 OrderBookPtr StockExchange::getOrderBookFor(std::string_view ticker)
@@ -757,7 +762,7 @@ void StockExchange::addTradeToTape(TradePtr trade)
     getTradeTapeFor(trade->ticker)->writeRow(trade);
 
     // Add trade to in-memory list 
-    in_memory_trades_[trade->ticker].push_back(trade);
+    in_memory_trades_[trade->ticker].push_back(trade); // CORRECTLY GETTING TRADES
 };
 
 void StockExchange::addMarketDataSnapshot(MarketDataPtr data)

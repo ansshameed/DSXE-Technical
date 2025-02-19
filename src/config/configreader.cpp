@@ -43,9 +43,6 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         }
     }
 
-    // Store agent name mapping
-    std::unordered_map<int, std::string> agent_names; 
-
     // Parse through the configured agents
     int agent_id = 0;
     pugi::xml_node agents = simulation.child("agents");
@@ -323,7 +320,7 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     const std::string& ticker, 
     AgentType trader_type, 
     const std::string& side, 
-    const std::unordered_map<std::string, std::string>& exchange_addrs_map)
+    const std::unordered_map<std::string, std::string>& exchange_addrs_map, const std::string& trader_string_name)
 {
     TraderConfigPtr trader_config = std::make_shared<TraderConfig>();
     trader_config->agent_id = id;
@@ -344,7 +341,8 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     trader_config->cancelling = false; // Default
 
     // Assign Name Based on ID. 
-    trader_config->name = "Trader_" + std::to_string(id);
+    //trader_config->name = "Trader_" + std::to_string(id);
+    trader_config->name = trader_string_name + ((side == "buy") ? "_Buyer" : "_Seller");
 
     // Set buy or sell side for each trader. 
     trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
@@ -428,8 +426,8 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
                 throw std::runtime_error("Invalid value in CSV: each value must be between 0 and 5.");
             }
 
-            std::string trader_type = trader_types[index]; // Get trader type from index
-            AgentType type = agent_type_map[trader_type]; // Get agent type from trader type
+            std::string trader_string_name = trader_types[index]; // Get trader type from index
+            AgentType type = agent_type_map[trader_string_name]; // Get agent type from trader type
 
             // For each count, create both buyer and seller agents.
             for (int i = 0; i < count; ++i)
@@ -437,10 +435,10 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
                 for (const std::string& side : {"buy", "sell"}) // Create buyer and seller agents
                 {   
                     std::cout << "Assigning trader " << agent_id << " to port " << port << std::endl;
+                    std::cout << "Trader name " << trader_string_name << " with side " << side << std::endl;
                     std::string addr = "127.0.0.1:" + std::to_string(port++);
                     trader_configs.push_back(configureTraderFromCSV(
-                        agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map
-                    ));
+                        agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map, trader_string_name));
                 }
             }
         }

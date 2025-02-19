@@ -237,6 +237,9 @@ private:
 
     /** Simulation config params. */
     SimulationConfigPtr simulation_config_;
+
+    std::unordered_map<std::string, double> agent_profits_by_name_;
+
 };
 
 #endif

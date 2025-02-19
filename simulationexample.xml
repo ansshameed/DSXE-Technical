@@ -10,7 +10,7 @@
     </instances>
     <agents>
         <exchanges>
-            <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="40"/>
+            <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="20"/>
         </exchanges>
         <watchers>
             <watcher exchange="NYSE" ticker="AAPL"/>

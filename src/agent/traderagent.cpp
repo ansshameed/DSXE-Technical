@@ -101,7 +101,7 @@ void TraderAgent::subscribeToMarket(std::string_view exchange, std::string_view 
     SubscribeMessagePtr msg = std::make_shared<SubscribeMessage>();
     msg->ticker = std::string{ticker};
     msg->address = myAddr() + std::string{":"} + std::to_string(myPort());
-    msg->agent_name = this->agent_name_; 
+    msg->agent_name = getAgentName();
 
     Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
 }

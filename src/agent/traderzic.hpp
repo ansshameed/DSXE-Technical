@@ -60,8 +60,6 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         is_trading_ = false;
         std::cout << "Trading window ended.\n";
-        displayProfitability();
-        //sendProfitToExchange(); 
         lock.unlock();
     }
 
@@ -87,40 +85,11 @@ public:
 
         // std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
         // " Qty remaining = " << msg->order->remaining_quantity << "\n";
-
-        //Calculate Profitability
-        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
-        {   
-            if (msg->trade) { 
-                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
-                executed_trades_.push_back(trade);
-            }
-        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
     {
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
-    }
-
-    void displayProfitability() 
-    { 
-        // Calculate profit or loss
-
-        for (const auto& trade : executed_trades_) 
-        { 
-            if (trade.side == Order::Side::ASK) // Sell order 
-            { 
-                total_profit_ += trade.price * trade.quantity; 
-            }
-            else if (trade.side == Order::Side::BID) // Buy order 
-            { 
-                total_profit_ -= trade.price * trade.quantity; 
-            }
-        }
-
-        sendProfitToExchange();
-        
     }
 
 private:
@@ -142,12 +111,7 @@ private:
             lock.unlock();
             std::cout << "Finished actively trading.\n";
         });
-    }
-
-    void sendProfitToExchange()
-        {
-            std::cout << "[DEBUG] ZIC Trader Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n";
-        }
+    } 
 
     void sleep()
     {

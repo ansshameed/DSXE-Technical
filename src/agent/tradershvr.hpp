@@ -55,8 +55,6 @@ public:
     void onTradingEnd() override
     {   
         is_trading_ = false;
-        displayProfitability();
-        //sendProfitToExchange();
         std::cout << "Trading window ended.\n";
 
     }
@@ -89,15 +87,6 @@ public:
 
         //std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
         //" Qty remaining = " << msg->order->remaining_quantity << "\n";
-
-        //Calculate Profitability
-        if(msg->order->status == Order::Status::FILLED || msg->order->status == Order::Status::PARTIALLY_FILLED) 
-        {   
-            if (msg->trade) { 
-                Trade trade = {msg->trade->price, msg->trade->quantity, msg->order->side};
-                executed_trades_.push_back(trade);
-            }
-        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
@@ -105,35 +94,7 @@ public:
         throw std::runtime_error("Shaver trader does not cancel orders therefore cannot receive cancel rejection.");
     }
 
-    void displayProfitability() 
-    { 
-
-        double buyer_profit = 0.0; 
-        double seller_profit = 0.0; 
-
-        // Calculate profit or loss
-        for (const auto& trade : executed_trades_) 
-        { 
-            if (trade.side == Order::Side::ASK) // Sell order 
-            { 
-                seller_profit += trade.price * trade.quantity; 
-            }
-            else if (trade.side == Order::Side::BID) // Buy order 
-            { 
-                buyer_profit -= trade.price * trade.quantity; 
-            }
-        }
-
-        total_profit_ = buyer_profit + seller_profit;
-        sendProfitToExchange();
-    }
-
 private:
-
-    void sendProfitToExchange()
-        {
-            std::cout << "[DEBUG] SHVR Trader Profit: " << std::fixed << std::setprecision(0) << total_profit_ << "\n";
-        }
 
     double getShaverPrice(MarketDataMessagePtr msg)
     {
