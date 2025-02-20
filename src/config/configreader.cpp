@@ -117,7 +117,7 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         ++agent_id;
     }
 
-    SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs, watcher_configs);
+    SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs, watcher_configs, std::make_shared<OrderSchedule>());
     return simulation_config;
 }
 
@@ -517,6 +517,5 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
     }
 
     file.close();
-    
-    return std::make_shared<SimulationConfig>(1, 30, exchange_configs, trader_configs, watcher_configs);
+    return std::make_shared<SimulationConfig>(1, 30, exchange_configs, trader_configs, watcher_configs, std::make_shared<OrderSchedule>());
 }

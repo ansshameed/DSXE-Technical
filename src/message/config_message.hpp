@@ -6,6 +6,7 @@
 #include "message.hpp"
 #include "../agent/agenttype.hpp"
 #include "../config/agentconfig.hpp"
+#include "../config/orderschedule.hpp"
 
 /** The message sent by the OrchestratorAgent to each SimulationAgent to configure that node. */
 class ConfigMessage : public Message
@@ -23,6 +24,9 @@ public:
     /** Agent-specific configuration object. */
     AgentConfigPtr config;
 
+    /** Order schedule (supply/demand schedule) to be used by the agent. */
+    OrderSchedulePtr order_schedule;
+
 private:
 
     friend class boost::serialization::access;
@@ -33,6 +37,7 @@ private:
         ar & my_addr;
         ar & agent_type;
         ar & config;
+        ar & order_schedule; 
     }
 
 };

@@ -7,11 +7,21 @@
 #include "../config/agentconfig.hpp"
 #include "../config/exchangeconfig.hpp"
 #include "../config/marketwatcherconfig.hpp"
+#include "../config/orderschedule.hpp"
 #include "../message/config_message.hpp"
+#include "../message/limit_order_message.hpp"
+#include "../message/config_message.hpp"
+#include "../order/order.hpp"
 
 #include <sys/stat.h> 
 #include <sys/types.h>
-#include <unistd.h>   
+#include <unistd.h>
+
+#include <chrono>
+#include <iostream>
+#include <random>
+#include <thread>
+
 
 class OrchestratorAgent : public Agent 
 {
@@ -61,6 +71,8 @@ public:
                                 << std::endl;
                     configureNode(watcher_config);
                 }
+
+                generateCustomerOrders(simulation); // Generate customer orders for S/D variability.
 
                 // Wait for this trial to finish before starting the next one
                 std::cout << "Simulation " << i << " configured." << std::endl;
@@ -140,7 +152,110 @@ public:
         if (ret != 0) {
             std::cerr << "Failed to launch " << trader_type << " trader at: " << addr << "\n"; 
         }
-    }; 
+    };
+
+    /** Generate offset-based orders every second until simulation->time() expires for S/D variability. */
+    void generateCustomerOrders(SimulationConfigPtr simulation) 
+    { 
+
+        // Pull the schedule info (with offsets) out of the simulation config 
+
+        // Read CSV and store in schedule 
+        std::string csv_path = "../IBM-310817.csv";
+        // Check if there is a schedule, otherwise can't do offset-based orders 
+        OrderSchedulePtr schedule = simulation->orderSchedule();
+        if(!schedule) { 
+            std::cerr << "No order schedule found in simulation config -- cannot generate offset-based orders.\n" << std::endl;
+            return;
+        } else {
+            schedule->offset_events = getOffsetEventList(csv_path);
+        }
+
+        auto &events = schedule->offset_events; 
+        double total_time = simulation->time();
+
+        // Assume a single exchnage 
+        if (simulation->exchanges().empty()) { 
+            std::cerr << "No exchanges found in simulation config -- cannot generate offset-based orders.\n" << std::endl;
+            return; 
+        }
+
+        // Get the first exchange details
+        auto exchange_config = simulation->exchanges().front(); 
+        std::string exchange_addr = exchange_config->addr;
+        int exchange_id = exchange_config->agent_id;
+        std::string ticker = exchange_config->tickers.front(); 
+
+        // Decide supply & demand ranges 
+        std::random_device rd; 
+        std::mt19937 gen(rd());
+        std::uniform_int_distribution<> supplyMinDist(schedule->supply_min_low,  schedule->supply_min_high);
+        std::uniform_int_distribution<> supplyMaxDist(schedule->supply_max_low,  schedule->supply_max_high);
+        std::uniform_int_distribution<> demandMinDist(schedule->demand_min_low, schedule->demand_min_high);
+        std::uniform_int_distribution<> demandMaxDist(schedule->demand_max_low, schedule->demand_max_high);
+
+        // Sample supply & demand ranges
+        int sMin = supplyMinDist(gen);
+        int sMax = supplyMaxDist(gen);
+        int dMin = demandMinDist(gen);
+        int dMax = demandMaxDist(gen);
+
+        // For each second in real time 
+        double total_seconds = simulation->time();
+
+        for (int current_second = 0; current_second < (int)total_time; ++current_second) 
+        { 
+            int offset_value = 0; 
+            if(!events.empty()) { 
+                offset_value = realWorldScheduleOffset(current_second, total_time, events); 
+            }
+            else { 
+                offset_value = scheduleOffset(current_second);
+            }
+
+            // Randomly decide side or do a 50/50 e.g. if even => BID, if odd => ASK. Could be random - CHECK TBSE.PY
+            // TBSE.PY - SENDS 3 BUY ADN 3 SELL ORDERS EVERY SECOND. MINE JUST GENERATES BUYS/SELLS BASED ON ODD/EVEN TIME SECOND. PERHAPS LATER FIX.
+            Order::Side side = (current_second % 2 == 0) ? Order::Side::BID : Order::Side::ASK; 
+
+            // Pick a base limit from the supply and demand
+            // SELL => pick from [sMin, sMax], BUY => pick from [dMin, dMax]
+            int base_price = 0;
+            if (side == Order::Side::ASK) { 
+                std::uniform_int_distribution<> dist(sMin, sMax);
+                int base_price = dist(gen);
+            }
+            else { 
+                std::uniform_int_distribution<> dist(dMin, dMax);
+                int base_price = dist(gen);
+            }
+
+            int final_price = base_price + offset_value;
+            if (final_price < 1) final_price = 1; 
+            if (final_price > 9999) final_price = 9999;
+
+            // Create the limit order
+            LimitOrderMessagePtr order_msg = std::make_shared<LimitOrderMessage>();
+            order_msg->sender_id = 999; // Orchestrator 
+            order_msg->ticker = ticker; 
+            order_msg->side = side; // SIDE
+            order_msg->quantity = 100; 
+            order_msg->price = final_price;
+            order_msg->time_in_force = Order::TimeInForce::GTC;
+            order_msg->agent_name = "Orchestrator";
+
+
+            // Send limit order to exchange
+            this->connect(exchange_addr, std::to_string(exchange_id), [=, this](){
+                this->sendMessageTo(std::to_string(exchange_id), std::static_pointer_cast<Message>(order_msg));
+            });
+
+
+            // Variability every second
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+
+        std::cout << "[Orchestrator] Finished generating offset-based orders.\n";
+    }
 
 private:
 

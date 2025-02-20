@@ -183,6 +183,7 @@ void TraderAgent::signalTradingStart()
     });
 }
 
+/** Blotter to track individual trader profits. */
 void TraderAgent::bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & order) { 
     
     //double current_time - IF WE WANT TO RECORD PROFIT PER TIME - LOOK BELOW. PUT IN DECLARATION ABOVE IF TIME NEEDED

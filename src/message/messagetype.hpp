@@ -13,7 +13,8 @@ enum class MessageType : int
     CANCEL_ORDER,
     EXECUTION_REPORT,
     CANCEL_REJECT, 
-    PROFIT
+    PROFIT, 
+    TRADER_CONFIG
 };
 
 #endif
