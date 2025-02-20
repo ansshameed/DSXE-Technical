@@ -182,3 +182,30 @@ void TraderAgent::signalTradingStart()
         lock.unlock();
     });
 }
+
+void TraderAgent::bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & order) { 
+    
+    //double current_time - IF WE WANT TO RECORD PROFIT PER TIME - LOOK BELOW. PUT IN DECLARATION ABOVE IF TIME NEEDED
+    double profit = 0.0; 
+
+    if (order->side == Order::Side::BID) {
+        profit = order->price - trade->price; 
+    } else {
+        profit = trade->price - order->price;
+    }
+
+    if (profit < 0) { 
+        std::cerr << "Negative profit detected: " << profit << "\n"; 
+        std::cerr << "Aborting trade to prevent loss.\n"; 
+        profit = 0; 
+    }
+
+    balance += profit; 
+    n_trades++; 
+    //profit_per_time = balance / (current_time - birth_time_); 
+
+    blotter_.push_back(trade);
+    std::cout << "Trade booked: quantity: " << trade->quantity << " @ price: " << trade->price << " for profit: " << profit << "\n";
+    std::cout << "Order price: " << order->price << ", Trade price: " << trade->price << "\n";
+
+}

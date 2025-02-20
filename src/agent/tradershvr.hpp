@@ -53,9 +53,10 @@ public:
     }
 
     void onTradingEnd() override
-    {   
+    {    
         is_trading_ = false;
         std::cout << "Trading window ended.\n";
+        std::cout << "Final profit: " << balance << "\n";
 
     }
 
@@ -69,9 +70,9 @@ public:
         lock.unlock(); 
 
         std::cout << "Received market data from " << exchange << "\n";
-        //int quantity = 100;
+        int quantity = 100;
  
-        int quantity = getRandomOrderSize(); // Use random order size 
+        //int quantity = getRandomOrderSize(); // Use random order size 
         double price = getShaverPrice(msg);
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
         std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
@@ -83,6 +84,15 @@ public:
         if (msg->order->status == Order::Status::NEW)
         {
             last_accepted_order_id_ = msg->order->id;
+        }
+
+        if (msg->trade) { 
+            // Cast to LimitOrder if needed
+            LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
+            if (!limit_order) {
+                throw std::runtime_error("Failed to cast order to LimitOrder.");
+            }
+            bookkeepTrade(msg->trade, limit_order);
         }
 
         //std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 

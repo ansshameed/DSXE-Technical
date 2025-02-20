@@ -645,23 +645,27 @@ void StockExchange::computeProfits()
                 auto& buy_record = trader_inventory[trade->seller_id].front();
                 double buy_price = buy_record.first;
                 int available_qty = buy_record.second;
-
-                int qty_to_sell = std::min(quantity_to_sell, available_qty);
-                total_cost += qty_to_sell * buy_price;
-                quantity_to_sell -= qty_to_sell;
-                buy_record.second -= qty_to_sell;
-
+            
+                int qty = std::min(quantity_to_sell, available_qty);
+                total_cost += qty * buy_price;
+                quantity_to_sell -= qty;
+                buy_record.second -= qty;
+            
                 if (buy_record.second == 0) {
                     trader_inventory[trade->seller_id].erase(
                         trader_inventory[trade->seller_id].begin()
                     );
                 }
             }
-
+            
             // Revenue from sale.
             double revenue = trade->price * trade->quantity;
             // Profit is revenue minus the cost of the shares sold.
             double profit = revenue - total_cost;
+
+            if (profit < 0) {
+                profit = 0;
+            }
 
             // Update the seller’s cash with the profit.
             trader_cash[trade->seller_id] += profit;

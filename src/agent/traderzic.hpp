@@ -58,8 +58,9 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        is_trading_ = false;
         std::cout << "Trading window ended.\n";
+        std::cout << "Final profit: " << balance << "\n"; 
+        is_trading_ = false;
         lock.unlock();
     }
 
@@ -81,6 +82,15 @@ public:
         if (msg->order->status == Order::Status::NEW)
         {
             last_accepted_order_id_ = msg->order->id;
+        }
+
+        if (msg->trade) { 
+            // Cast to LimitOrder if needed
+            LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
+            if (!limit_order) {
+                throw std::runtime_error("Failed to cast order to LimitOrder.");
+            }
+            bookkeepTrade(msg->trade, limit_order);
         }
 
         // std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
@@ -132,8 +142,8 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        //int quantity = 100;
-        int quantity = getRandomOrderSize();
+        int quantity = 100;
+        //int quantity = getRandomOrderSize();
         double price = getRandomPrice();
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
 
@@ -173,16 +183,6 @@ private:
     constexpr static double MIN_PRICE = 1.0;
     constexpr static double MAX_PRICE = 200.0;
     constexpr static double REL_JITTER = 0.25;
-
-    // Profitability parameters 
-    struct Trade { 
-        double price;
-        int quantity;
-        Order::Side side;
-    }; 
-    std::vector<Trade> executed_trades_; 
-    double total_profit_ = 0.0;
-
 };
 
 #endif

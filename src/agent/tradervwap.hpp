@@ -40,10 +40,11 @@ public:
     }
 
     void onTradingEnd() override
-    {
+    {   
         std::unique_lock<std::mutex> lock(mutex_);
-        is_trading_ = false;
         std::cout << "Trading window ended.\n";
+        std::cout << "Final profit: " << balance << "\n"; 
+        is_trading_ = false;
         lock.unlock();
     }
 
@@ -90,13 +91,22 @@ public:
         {
             last_accepted_order_id_ = msg->order->id;
         }
+
+        if (msg->trade) { 
+            // Cast to LimitOrder if needed
+            LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
+            if (!limit_order) {
+                throw std::runtime_error("Failed to cast order to LimitOrder.");
+            }
+            bookkeepTrade(msg->trade, limit_order);
+        }
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
     {
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     } 
-    
+
 private:
 
     void activelyTrade()
@@ -131,7 +141,8 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        int quantity = getRandomOrderSize();
+        //int quantity = getRandomOrderSize();
+        int quantity = 100; 
 
         double price_adjustment = 0.001 * vwap_price; // 0.1% price adjustment for slippage 
         double price = (side == Order::Side::BID) ? (vwap_price + price_adjustment) // If BID then increase price slightly, else decrease price slightly (ASK)

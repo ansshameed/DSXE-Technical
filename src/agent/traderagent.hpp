@@ -5,6 +5,7 @@
 
 #include "agent.hpp"
 #include "../config/traderconfig.hpp"
+#include "../trade/trade.hpp"
 #include "../order/order.hpp"
 #include "../message/market_data_message.hpp"
 #include "../message/exec_report_message.hpp"
@@ -73,6 +74,13 @@ protected:
     /** The callback function called when the cancel order message is rejected. */
     virtual void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) = 0;
 
+    /** Bookkeeping trades for profit calculations. */
+    void bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & order);
+
+    /** Bookkeeping function for individual traders */
+    unsigned int n_trades; 
+    std::vector<TradePtr> blotter_; 
+    double balance = 0.0; 
 
 private:
 
@@ -93,6 +101,7 @@ private:
     unsigned int start_delay_in_seconds_ = 0;
     std::mutex mutex_;
     std::thread* delay_thread_;
+    
 };
 
 #endif
