@@ -360,8 +360,9 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
             }
 
             // Store the profit by trader name
+            agent_profits_by_name_[profit_msg->agent_name] += profit_msg->profit; // Store profits by agent name
             std::cout << "Received profit message from " << profit_msg->agent_name
-                      << " | Profit: " << std::fixed << std::setprecision(2) << profit_msg->profit << "\n";
+                      << " | Profit: " << std::fixed << std::setprecision(2) << profit_msg->profit << "\n"; // Print profits to terminal
             break;
         }
         default:
@@ -631,117 +632,28 @@ void StockExchange::endTradingSession()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Profitability 
-    //computeProfits(); // Compute profits at end of each trial - WRONG
-    //writeProfitsToCSV(); // Write profit to CSV - WRONG
+    writeProfitsToCSV(); // Write profit to CSV - WRONG
 };
-
-void StockExchange::computeProfits()
-{
-    std::unordered_map<int, double> trader_cash; 
-    std::unordered_map<int, std::vector<std::pair<double, int>>> trader_inventory;
-
-    for (const auto& [ticker, trades] : in_memory_trades_) {
-        for (const auto& trade : trades) {
-
-            double trade_value = trade->price * trade->quantity;
-
-            // Buyer: record the purchase.
-            trader_inventory[trade->buyer_id].push_back({trade->price, trade->quantity});
-            trader_cash[trade->buyer_id] -= trade_value;
-
-            // Seller: process sale.
-            int quantity_to_sell = trade->quantity;
-            double total_cost = 0.0; // Total cost of shares being sold
-
-            while (quantity_to_sell > 0 && !trader_inventory[trade->seller_id].empty()) {
-                auto& buy_record = trader_inventory[trade->seller_id].front();
-                double buy_price = buy_record.first;
-                int available_qty = buy_record.second;
-            
-                int qty = std::min(quantity_to_sell, available_qty);
-                total_cost += qty * buy_price;
-                quantity_to_sell -= qty;
-                buy_record.second -= qty;
-            
-                if (buy_record.second == 0) {
-                    trader_inventory[trade->seller_id].erase(
-                        trader_inventory[trade->seller_id].begin()
-                    );
-                }
-            }
-            
-            // Revenue from sale.
-            double revenue = trade->price * trade->quantity;
-            // Profit is revenue minus the cost of the shares sold.
-            double profit = revenue - total_cost;
-
-            if (profit < 0) {
-                profit = 0;
-            }
-
-            // Update the seller’s cash with the profit.
-            trader_cash[trade->seller_id] += profit;
-        }
-    }
-
-    // Now print out the computed profits by trader ID.
-    std::cout << "Trader Profits by ID:\n";
-    for (const auto& [trader_id, cash] : trader_cash) {
-        agent_profits_[trader_id] = cash;
-        std::cout << "Trader ID: " << trader_id 
-                  << " | Profit: " << std::fixed << std::setprecision(2) << cash 
-                  << "\n";
-    }
-
-    // Aggregate profits by trader name using the agent_names_ mapping.
-    // Clear any previous aggregation.
-    agent_profits_by_name_.clear();
-    for (const auto& [trader_id, profit] : agent_profits_) {
-        // Look up the agent name; if not found, fall back to the trader_id as a string.
-        std::string traderName = (agent_names_.count(trader_id)) ? agent_names_[trader_id] : std::to_string(trader_id);
-        agent_profits_by_name_[traderName] += profit;
-    }
-
-    // Print the aggregated profits by trader name.
-    std::cout << "Total Profits by Trader Name (Aggregated):\n";
-    // Create a vector to sort the aggregated results alphabetically by trader name.
-    std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
-    std::sort(sorted_profits.begin(), sorted_profits.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
-
-    for (const auto& [trader_name, profit] : sorted_profits) {
-        std::cout << "Trader Name: " << trader_name 
-                  << " | Total Profit: " << std::fixed << std::setprecision(0) << profit 
-                  << "\n";
-    }
-}
 
 void StockExchange::writeProfitsToCSV()
 {
-    // Aggregate profits from each trader ID into trader type.
-    agent_profits_by_name_.clear();
-    for (const auto& [agent_id, profit] : agent_profits_) {
-        std::string agentName = (agent_names_.count(agent_id)) ? agent_names_[agent_id] : std::to_string(agent_id);
-        agent_profits_by_name_[agentName] += profit;
-    }
+    std::vector<std::pair<std::string, double>> sorted_profits(
+        agent_profits_by_name_.begin(), agent_profits_by_name_.end()); // Copy aggregated profits to vector
 
-    // Sort the aggregated results alphabetically by trader name.
-    std::vector<std::pair<std::string, double>> sorted_profits(agent_profits_by_name_.begin(), agent_profits_by_name_.end());
     std::sort(sorted_profits.begin(), sorted_profits.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; });
-
-    // Write the aggregated profits to CSV for each ticker.
-    for (const auto& [ticker, writer] : profits_writer_)
-    {
-        for (const auto& [trader_name, profit] : sorted_profits)
-        {
-            ProfitSnapshotPtr profit_snapshot = std::make_shared<ProfitSnapshot>(trader_name, profit);
-            writer->writeRow(profit_snapshot);
+              [](const auto& a, const auto& b) { return a.first < b.first; }); // Sort profits by agent name
+    
+    // Write each profit snapshot row to the CSV file
+    for (const auto& [ticker, writer] : profits_writer_) { // Iterate through all profit writers
+        for (const auto& [agentName, profit] : sorted_profits) { // Iterate through all profits
+            ProfitSnapshotPtr snapshot = std::make_shared<ProfitSnapshot>(agentName, profit); // Create a profit snapshot
+            writer->writeRow(snapshot); // Write the profit snapshot to the profits file
         }
-
-        writer->stop();
+        writer->stop(); 
     }
 }
+
+
 
 OrderBookPtr StockExchange::getOrderBookFor(std::string_view ticker)
 {
