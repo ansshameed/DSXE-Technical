@@ -35,6 +35,8 @@ public:
         addDelayedStart(config->delay);
     }
 
+    std::string getAgentName() const override { return "ZIP"; }
+
     /** Gracefully terminates the trader, freeing all memory. */
     void terminate() override
     {
@@ -58,6 +60,7 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
+        sendProfitToExchange(); 
         is_trading_ = false;
         std::cout << "Trading window ended.\n"; 
         lock.unlock();
@@ -95,6 +98,14 @@ public:
     }
 
 private:
+
+    void sendProfitToExchange()
+    {
+        ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+        profit_msg->agent_name = getAgentName(); 
+        profit_msg->profit = balance; 
+        sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+    }
 
     void initialiseConstants()
     {
@@ -369,7 +380,6 @@ private:
     }; 
     std::vector<Trade> executed_trades_; 
     double total_profit_ = 0.0;
-    std::string agent_name_ = "ZIP";
 };
 
 #endif

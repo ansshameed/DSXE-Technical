@@ -347,6 +347,12 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     // Set buy or sell side for each trader. 
     trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
 
+    // Assign a different limit price per trader - DEBUG TO TEST PROFITABILIITY BY TESTING RANDOM LIMIT PRICES
+    //std::uniform_int_distribution<int> dist(40, 60); // Range of limit prices
+    //static std::random_device rd; // Random seed
+    //static std::mt19937 gen(rd()); // Random number generator
+    //trader_config->limit = dist(gen);
+
     // DEBUG - Print Trader Configuration
     std::cout << "Configuring CSV Trader: ID=" << trader_config->agent_id
               << ", Name=" << trader_config->name

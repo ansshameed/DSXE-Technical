@@ -58,8 +58,9 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
+        sendProfitToExchange(); 
         std::cout << "Trading window ended.\n";
-        std::cout << "Final profit: " << balance << "\n"; 
+        std::cout << "Final profit: " << balance << "\n";
         is_trading_ = false;
         lock.unlock();
     }
@@ -90,6 +91,8 @@ public:
             if (!limit_order) {
                 throw std::runtime_error("Failed to cast order to LimitOrder.");
             }
+            std::cout << "Execution report received for order: " << msg->order->id 
+                << " | Status: " << msg->order->status << std::endl;
             bookkeepTrade(msg->trade, limit_order);
         }
 
@@ -103,6 +106,14 @@ public:
     }
 
 private:
+
+    void sendProfitToExchange()
+    {
+        ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+        profit_msg->agent_name = getAgentName(); 
+        profit_msg->profit = balance; 
+        sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+    }   
 
     void activelyTrade()
     {

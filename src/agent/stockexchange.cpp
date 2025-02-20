@@ -352,6 +352,18 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
             onSubscribe(msg);
             break;
         }
+        case MessageType::PROFIT: // Handling ProfitMessage
+        {
+            ProfitMessagePtr profit_msg = std::dynamic_pointer_cast<ProfitMessage>(message);
+            if (profit_msg == nullptr) {
+                throw std::runtime_error("Failed to cast message to ProfitMessage");
+            }
+
+            // Store the profit by trader name
+            std::cout << "Received profit message from " << profit_msg->agent_name
+                      << " | Profit: " << std::fixed << std::setprecision(2) << profit_msg->profit << "\n";
+            break;
+        }
         default:
         {   
             // Send message to the matching engine
@@ -619,8 +631,8 @@ void StockExchange::endTradingSession()
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
     // Profitability 
-    computeProfits(); // Compute profits at end of each trial
-    writeProfitsToCSV(); // Write profit to CSV 
+    //computeProfits(); // Compute profits at end of each trial - WRONG
+    //writeProfitsToCSV(); // Write profit to CSV - WRONG
 };
 
 void StockExchange::computeProfits()

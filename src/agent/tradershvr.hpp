@@ -55,6 +55,7 @@ public:
     void onTradingEnd() override
     {    
         is_trading_ = false;
+        sendProfitToExchange();
         std::cout << "Trading window ended.\n";
         std::cout << "Final profit: " << balance << "\n";
 
@@ -105,6 +106,15 @@ public:
     }
 
 private:
+
+    void sendProfitToExchange()
+    {
+        ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
+        profit_msg->agent_name = getAgentName(); 
+        profit_msg->profit = balance; 
+        sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
+    }
+
 
     double getShaverPrice(MarketDataMessagePtr msg)
     {
