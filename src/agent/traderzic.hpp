@@ -86,14 +86,32 @@ public:
         }
 
         if (msg->trade) { 
-            // Cast to LimitOrder if needed
+            // Debugging: Print trade details
+            std::cout << "Trade Executed! Price: " << msg->trade->price
+                      << " | Quantity: " << msg->trade->quantity
+                      << " | Order ID: " << msg->order->id << std::endl;
+    
+            // Cast order to LimitOrder
             LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
             if (!limit_order) {
-                throw std::runtime_error("Failed to cast order to LimitOrder.");
+                std::cerr << "Error: Failed to cast order to LimitOrder! Check order type." << std::endl;
+                return;
             }
-            std::cout << "Execution report received for order: " << msg->order->id 
-                << " | Status: " << msg->order->status << std::endl;
+    
+            // Debugging: Verify limit order details
+            std::cout << "Limit Order Details - Price: " << limit_order->price
+                      << " | Side: " << (limit_order->side == Order::Side::BID ? "BID" : "ASK") << std::endl;
+    
+            // Sanity check: Ensure the trade is within expected price limits
+            if ((limit_order->side == Order::Side::BID && msg->trade->price > limit_order->price) ||
+                (limit_order->side == Order::Side::ASK && msg->trade->price < limit_order->price)) {
+                std::cerr << "Warning: Trade executed at unexpected price! Limit Order Price: " 
+                          << limit_order->price << " | Trade Price: " << msg->trade->price << std::endl;
+            }
+    
+            // Call bookkeeping function
             bookkeepTrade(msg->trade, limit_order);
+            std::cout << "Bookkeeping complete for Order ID: " << limit_order->id << std::endl;
         }
 
         // std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 

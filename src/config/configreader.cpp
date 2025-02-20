@@ -315,6 +315,8 @@ AgentConfigPtr ConfigReader::configureTraderZIP(int id, pugi::xml_node& xml_node
 
 }
 
+/** Reading and configuring trader configs from markets.csv. */
+
 AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& addr, 
     const std::string& exchange, 
     const std::string& ticker, 
@@ -368,6 +370,62 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     return std::static_pointer_cast<AgentConfig>(trader_config);
 }
 
+/** Configure ZIP Trader from CSV specifically. */
+AgentConfigPtr ConfigReader::configureTraderZIPFromCSV(
+    int id, 
+    const std::string& addr,
+    const std::string& exchange,
+    const std::string& ticker,
+    AgentType trader_type,
+    const std::string& side,
+    const std::unordered_map<std::string, std::string>& exchange_addrs_map, 
+    const std::string& trader_string_name)
+{ 
+    ZIPConfigPtr zip_config = std::make_shared<ZIPConfig>();
+    zip_config->agent_id = id;
+    zip_config->addr = addr;
+    zip_config->type = trader_type;
+    zip_config->exchange_name = exchange;
+
+    if (exchange_addrs_map.find(exchange) == exchange_addrs_map.end()) {
+        throw std::runtime_error("Exchange address not found for " + exchange);
+    }
+
+    zip_config->exchange_addr = exchange_addrs_map.at(exchange);
+    zip_config->ticker = ticker;
+
+    // Set default values
+    zip_config->limit = 50; 
+    zip_config->delay = 0;
+    zip_config->trade_interval = 1;
+    zip_config->cancelling = false;
+
+    std::string cancelling {""};
+    zip_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
+
+    // ZIP specific parameters 
+    zip_config->min_margin = 0.01; // Default minimum margin value
+    zip_config->name = trader_string_name + ((side == "buy") ? "_Buyer" : "_Seller");
+    zip_config->liquidity_interval = 1; // Default liquidity interval value
+
+    std::cout << "Configuring CSV ZIP Trader: ID=" << zip_config->agent_id
+              << ", Name=" << zip_config->name
+              << ", Exchange=" << zip_config->exchange_name
+              << ", Exchange Addr=" << zip_config->exchange_addr
+              << ", Ticker=" << zip_config->ticker
+              << ", Limit=" << zip_config->limit
+              << ", Trade Interval=" << zip_config->trade_interval
+              << ", Delay=" << zip_config->delay
+              << ", Side=" << zip_config->side
+              << ", Min Margin=" << zip_config->min_margin
+                << ", Liquidity Interval=" << zip_config->liquidity_interval
+              << "\n";
+
+    return std::static_pointer_cast<AgentConfig>(zip_config);
+
+}
+    
+
 SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath, 
     const std::unordered_map<std::string, std::string>& exchange_addrs_map, int& agent_id, const std::string& default_exchange_name, const std::string& default_ticker)
 {
@@ -387,8 +445,8 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
 
     int port = 8100; // Start assigning trader ports from 8100
 
-    // These are the expected trader types (exactly 9 values).
-    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb"};
+    // These are the expected trader types (exactly 10 values).
+    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb", "zip"};
     std::unordered_map<std::string, AgentType> agent_type_map = {
         {"zic", AgentType::TRADER_ZIC}, 
         {"shvr", AgentType::TRADER_SHVR},
@@ -398,7 +456,8 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
         {"obvd", AgentType::TRADER_OBV_DELTA},
         {"obvvwap", AgentType::TRADER_OBV_VWAP},
         {"rsi", AgentType::TRADER_RSI},
-        {"rsibb", AgentType::TRADER_RSI_BB}
+        {"rsibb", AgentType::TRADER_RSI_BB}, 
+        {"zip", AgentType::TRADER_ZIP}
     };
 
     // Use default exchange name and ticker from XML - WORKS ONLY FOR ONE EXCHANGE; CHANGE FOR ARBITRAGE. 
@@ -417,8 +476,8 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
             tokens.push_back(token);
         }
 
-        // Validate exactly 9 agents (tokens). 
-        if (tokens.size() != 9) {
+        // Validate exactly 10 agents (tokens). 
+        if (tokens.size() != 10) {
             throw std::runtime_error("Invalid CSV format: each line must contain exactly 9 comma-separated values.");
         }
 
@@ -443,8 +502,15 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
                     std::cout << "Assigning trader " << agent_id << " to port " << port << std::endl;
                     std::cout << "Trader name " << trader_string_name << " with side " << side << std::endl;
                     std::string addr = "127.0.0.1:" + std::to_string(port++);
-                    trader_configs.push_back(configureTraderFromCSV(
-                        agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map, trader_string_name));
+                    if (type == AgentType::TRADER_ZIP)
+                    { 
+                        trader_configs.push_back(configureTraderZIPFromCSV(
+                                agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map, trader_string_name));
+                    }
+                    else { 
+                        trader_configs.push_back(configureTraderFromCSV(
+                            agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map, trader_string_name));
+                    } 
                 }
             }
         }

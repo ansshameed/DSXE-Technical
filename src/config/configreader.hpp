@@ -25,11 +25,12 @@ public:
     /** Configures the agent based on the XML tag. - LEAVE THIS HERE IN CASE OF MANUAL SIMULATION CONFIG ALLOCATION. */
     static AgentConfigPtr configureAgent(int id, pugi::xml_node& xml_node, std::string& addr, std::unordered_map<std::string, std::string>& exchange_addr);
 
-    /** Configures agent dynamically based on CVS */
-    static AgentConfigPtr configureTraderFromCSV(int id, const std::string& addr, const std::string& exchange, const std::string& ticker, AgentType trader_type, const std::string& side, const std::unordered_map<std::string, std::string>& exchange_addrs_map, const std::string& trader_string_name); 
+    /** Configures agent dynamically based on CSV */
+    static AgentConfigPtr configureTraderFromCSV(int id, const std::string& addr, const std::string& exchange, const std::string& ticker, AgentType trader_type, const std::string& side, const std::unordered_map<std::string, std::string>& exchange_addrs_map, const std::string& trader_string_name);
     
+    /** Configure ZIP based on  */
+    static AgentConfigPtr configureTraderZIPFromCSV(int id, const std::string& addr, const std::string& exchange, const std::string& ticker, AgentType trader_type, const std::string& side, const std::unordered_map<std::string, std::string>& exchange_addrs_map, const std::string& trader_string_name);
     
-
 private:
 
     static ExchangeConfigPtr configureExchange(int id, pugi::xml_node& xml_node, std::string& addr);
