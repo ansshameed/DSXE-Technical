@@ -21,6 +21,7 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
     std::vector<std::string> exchange_addrs;
     std::vector<std::string> trader_addrs;
     std::vector<std::string> watcher_addrs;
+    std::vector<std::string> injector_addrs;
     
     pugi::xml_node instances = simulation.child("instances");
     for (auto instance : instances.children())
@@ -40,6 +41,10 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         else if (std::string{instance.attribute("agent-type").value()} == "watcher")
         {
             watcher_addrs.push_back(addr);
+        }
+        else if (std::string{instance.attribute("agent-type").value()} == "orderinjector")
+        {
+            injector_addrs.push_back(addr);
         }
     }
 
@@ -117,7 +122,24 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
         ++agent_id;
     }
 
-    SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs, watcher_configs, std::make_shared<OrderSchedule>());
+    // Injectors 
+    std::vector<AgentConfigPtr> injector_configs;
+    int injector_instance_id = 0;
+    pugi::xml_node injectors = simulation.child("agents").child("orderinjectors");
+    for (auto injector : injectors.children())
+    {
+        AgentConfigPtr injector_config = configureOrderInjector(
+            agent_id,
+            injector,
+            injector_addrs.at(injector_instance_id),
+            exchange_addrs_map
+        );
+        injector_configs.push_back(injector_config);
+        ++injector_instance_id;
+        ++agent_id;
+    }
+
+    SimulationConfigPtr simulation_config = std::make_shared<SimulationConfig>(repetitions, time, exchange_configs, trader_configs, watcher_configs, injector_configs);
     return simulation_config;
 }
 
@@ -175,6 +197,10 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         case AgentType::MARKET_WATCHER:
         {
             return configureMarketWatcher(id, xml_node, addr, exchange_addrs);
+        }
+        case AgentType::ORDER_INJECTOR:
+        {
+            return configureOrderInjector(id, xml_node, addr, exchange_addrs);
         }
         default:
         {
@@ -279,6 +305,36 @@ AgentConfigPtr ConfigReader::configureMarketWatcher(int id, pugi::xml_node& xml_
     std::cout << "Configuring Market Watcher: Exchange=" << config->exchange_name 
           << ", Addr=" << config->exchange_addr 
           << ", Ticker=" << config->ticker << std::endl;
+
+    return std::static_pointer_cast<AgentConfig>(config);
+}
+
+AgentConfigPtr ConfigReader::configureOrderInjector(int id, pugi::xml_node& xml_node, std::string& addr, std::unordered_map<std::string, std::string>& exchange_addrs)
+{
+    OrderInjectorConfigPtr config = std::make_shared<OrderInjectorConfig>();
+    config->agent_id = id;
+    config->addr = addr;
+    config->type = AgentType::ORDER_INJECTOR;
+
+    config->exchange_name = std::string{xml_node.attribute("exchange").value()};
+    config->exchange_addr = exchange_addrs.at(config->exchange_name);
+    
+    config->ticker = std::string{xml_node.attribute("ticker").value()};
+
+    std::cout << "Configuring Order Injector: Exchange=" << config->exchange_name 
+          << ", Addr=" << config->exchange_addr 
+          << ", Ticker=" << config->ticker << std::endl;
+
+    
+    // Supply & Demand Values 
+    config->supply_min_low = 0; 
+    config->supply_min_high = 100;
+    config->supply_max_low = 100;
+    config->supply_max_high = 200;
+    config->demand_min_low = 0;
+    config->demand_min_high = 100;
+    config->demand_max_low = 100;
+    config->demand_max_high = 200;
 
     return std::static_pointer_cast<AgentConfig>(config);
 }
@@ -438,6 +494,7 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
     std::vector<AgentConfigPtr> trader_configs;
     std::vector<ExchangeConfigPtr> exchange_configs;
     std::vector<AgentConfigPtr> watcher_configs;
+    std::vector<AgentConfigPtr> injector_configs;
 
     if (exchange_addrs_map.empty()) { // Check if exchange addresses map is empty
         throw std::runtime_error("No exchange addresses found in XML.");
@@ -521,5 +578,5 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
     }
 
     file.close();
-    return std::make_shared<SimulationConfig>(1, 30, exchange_configs, trader_configs, watcher_configs, std::make_shared<OrderSchedule>());
+    return std::make_shared<SimulationConfig>(1, 30, exchange_configs, trader_configs, watcher_configs, injector_configs);
 }

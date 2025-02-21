@@ -4,6 +4,7 @@
 enum class AgentType : int
 {
     STOCK_EXCHANGE,
+    ORDER_INJECTOR,
     MARKET_WATCHER,
     TRADER_ZIC,
     TRADER_ZIP,
@@ -22,6 +23,7 @@ inline std::string to_string(AgentType agent_type)
 {
     switch (agent_type) {
         case AgentType::STOCK_EXCHANGE: return std::string{"StockExchange"};
+        case AgentType::ORDER_INJECTOR: return std::string{"OrderInjector"};
         case AgentType::MARKET_WATCHER: return std::string{"MarketDataWatcher"};
         case AgentType::TRADER_ZIC: return std::string{"TraderZIC"};
         case AgentType::TRADER_ZIP: return std::string{"TraderZIP"};

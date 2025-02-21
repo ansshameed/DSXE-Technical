@@ -8,6 +8,7 @@
 
 #include "stockexchange.hpp"
 #include "marketdatawatcher.hpp"
+#include "orderinjectoragent.hpp"
 #include "traderzic.hpp"
 #include "traderzip.hpp"
 #include "tradershvr.hpp"
@@ -35,6 +36,11 @@ public:
             {
                 auto exchange_config = std::static_pointer_cast<ExchangeConfig>(config);
                 std::shared_ptr<Agent> agent (new StockExchange{network_entity, exchange_config});
+                return agent;
+            }
+            case AgentType::ORDER_INJECTOR:
+            {
+                std::shared_ptr<Agent> agent (new OrderInjectorAgent{network_entity, std::static_pointer_cast<OrderInjectorConfig>(config)});
                 return agent;
             }
             case AgentType::MARKET_WATCHER:

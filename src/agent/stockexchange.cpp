@@ -94,7 +94,11 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
 {
     LimitOrderPtr order = order_factory_.createLimitOrder(msg);
 
-    if(order->sender_id == 999 || order->agent_name == "Orchestrator") { 
+    if (order->agent_name == "OrderInjector")
+    {
+        std::cout << "[StockExchange] Injected order stored but will not be matched: "
+                  << (order->side == Order::Side::BID ? "BID" : "ASK")
+                  << " @ " << order->price << " for " << order->ticker << "\n";
         getOrderBookFor(order->ticker)->addOrder(order);
         return; 
     }
@@ -128,7 +132,7 @@ void StockExchange::onMarketOrder(MarketOrderMessagePtr msg)
     {
         std::optional<LimitOrderPtr> best_ask = getOrderBookFor(msg->ticker)->bestAsk();
 
-        while (best_ask.has_value() && !order->isFilled())
+        while (best_ask.has_value() && !order->isFilled() && best_ask.value()->agent_name != "OrderInjector")
         {
             getOrderBookFor(msg->ticker)->popBestAsk();
 
@@ -143,7 +147,7 @@ void StockExchange::onMarketOrder(MarketOrderMessagePtr msg)
     {
         std::optional<LimitOrderPtr> best_bid = getOrderBookFor(msg->ticker)->bestBid();
 
-        while (best_bid.has_value() && !order->isFilled())
+        while (best_bid.has_value() && !order->isFilled() && best_bid.value()->agent_name != "OrderInjector")
         {
             getOrderBookFor(msg->ticker)->popBestBid();
 
@@ -207,7 +211,7 @@ void StockExchange::matchOrder(LimitOrderPtr order)
     if (order->side == Order::Side::BID) {
         std::optional<LimitOrderPtr> best_ask = getOrderBookFor(order->ticker)->bestAsk();
         
-        while (best_ask.has_value() && !order->isFilled() && order->price >= best_ask.value()->price)
+        while (best_ask.has_value() && !order->isFilled() && order->price >= best_ask.value()->price && best_ask.value()->agent_name != "OrderInjector")
         {
             getOrderBookFor(order->ticker)->popBestAsk();
 
@@ -222,7 +226,7 @@ void StockExchange::matchOrder(LimitOrderPtr order)
     {
         std::optional<LimitOrderPtr> best_bid = getOrderBookFor(order->ticker)->bestBid();
 
-        while (best_bid.has_value() && !order->isFilled() && order->price <= best_bid.value()->price)
+        while (best_bid.has_value() && !order->isFilled() && order->price <= best_bid.value()->price && best_bid.value()->agent_name != "OrderInjector")
         {
             getOrderBookFor(order->ticker)->popBestBid();
 
@@ -252,20 +256,18 @@ void StockExchange::matchOrderInFull(LimitOrderPtr order)
 
     if (order->side == Order::Side::BID) {
         std::optional<LimitOrderPtr> best_ask = getOrderBookFor(order->ticker)->bestAsk();
-        while (best_ask.has_value() && temp_rem_quantity > 0 && order->price >= best_ask.value()->price)
+        while (best_ask.has_value() && temp_rem_quantity > 0 && order->price >= best_ask.value()->price && best_ask.value()->agent_name != "OrderInjector")
         {
             getOrderBookFor(order->ticker)->popBestAsk();
-
             stack.push(best_ask.value());
             temp_rem_quantity -= std::min(temp_rem_quantity, best_ask.value()->remaining_quantity);
-
             best_ask = getOrderBookFor(order->ticker)->bestAsk();
         }
     }
     else
     {
         std::optional<LimitOrderPtr> best_bid = getOrderBookFor(order->ticker)->bestBid();
-        while (best_bid.has_value() && temp_rem_quantity > 0 && order->price <= best_bid.value()->price)
+        while (best_bid.has_value() && temp_rem_quantity > 0 && order->price <= best_bid.value()->price && best_bid.value()->agent_name != "OrderInjector")
         {
             getOrderBookFor(order->ticker)->popBestBid();
 

@@ -7,7 +7,7 @@
 #include "../config/agentconfig.hpp"
 #include "../config/exchangeconfig.hpp"
 #include "../config/marketwatcherconfig.hpp"
-#include "../config/orderschedule.hpp"
+#include "../config/orderinjectorconfig.hpp"
 #include "../message/config_message.hpp"
 #include "../message/limit_order_message.hpp"
 #include "../message/config_message.hpp"
@@ -50,8 +50,6 @@ public:
                 // Allow exchanges to initialise first
                 std::this_thread::sleep_for(std::chrono::seconds(10));
 
-                generateCustomerOrders(simulation); // Generate customer orders for S/D variability.
-
                 // Initialise traders
                 for (auto trader_config : simulation->traders())
                 {   
@@ -75,6 +73,18 @@ public:
                                 << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->ticker 
                                 << std::endl;
                     configureNode(watcher_config);
+                }
+
+                for (auto injector_config : simulation->injectors())
+                {
+                    std::cout << "Initialising injector: "
+                                << injector_config->addr 
+                                << " for exchange " 
+                                << std::dynamic_pointer_cast<OrderInjectorConfig>(injector_config)->exchange_name
+                                << std::endl;
+                    configureNode(injector_config);
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                    //launchOrderInjectorProcess(injector_config->addr, to_string(injector_config->type));
                 }
 
                 // Allow watcher to initialise first
@@ -160,105 +170,48 @@ public:
         }
     };
 
-    /** Generate offset-based orders every second until simulation->time() expires for S/D variability. */
-    void generateCustomerOrders(SimulationConfigPtr simulation) 
-    { 
+    void launchOrderInjectorProcess(const std::string& addr, const std::string& injector_type) {
 
-        // Pull the schedule info (with offsets) out of the simulation config 
-
-        // Read CSV and store in schedule 
-        std::string csv_path = "../IBM-310817.csv";
-        // Check if there is a schedule, otherwise can't do offset-based orders 
-        OrderSchedulePtr schedule = simulation->orderSchedule();
-        if(!schedule) { 
-            std::cerr << "No order schedule found in simulation config -- cannot generate offset-based orders.\n" << std::endl;
-            return;
-        } else {
-            schedule->offset_events = getOffsetEventList(csv_path);
+        // Clear logs directory only once (if not already cleared)
+        static bool logsCleared = false;
+        if (!logsCleared) {
+            int clear_logs_ret = system("rm -rf logs/*");
+            if (clear_logs_ret != 0) {
+                std::cerr << "Error: Failed to clear logs directory." << std::endl;
+            } else {
+                std::cout << "Cleared logs directory completely." << std::endl;
+            }
+            logsCleared = true;
         }
-
-        auto &events = schedule->offset_events; 
-        double total_time = simulation->time();
-
-        // Assume a single exchnage 
-        if (simulation->exchanges().empty()) { 
-            std::cerr << "No exchanges found in simulation config -- cannot generate offset-based orders.\n" << std::endl;
-            return; 
+        
+        std::string port = addr.substr(addr.find(":") + 1); // Extract port
+    
+        // Ensure logs and logs/injectors directory exist
+        struct stat info;
+        if (stat("logs", &info) != 0 || !S_ISDIR(info.st_mode)) {
+            if (mkdir("logs", 0777) != 0) {
+                std::cerr << "Error: Failed to create logs directory.\n";
+            } else {
+                std::cout << "Created logs directory..." << std::endl;
+            }
         }
-
-        // Get the first exchange details
-        auto exchange_config = simulation->exchanges().front(); 
-        std::string exchange_addr = exchange_config->addr;
-        int exchange_id = exchange_config->agent_id;
-        std::string ticker = exchange_config->tickers.front();
-
-        // Decide supply & demand ranges 
-        std::random_device rd; 
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> supplyMinDist(schedule->supply_min_low,  schedule->supply_min_high);
-        std::uniform_int_distribution<> supplyMaxDist(schedule->supply_max_low,  schedule->supply_max_high);
-        std::uniform_int_distribution<> demandMinDist(schedule->demand_min_low, schedule->demand_min_high);
-        std::uniform_int_distribution<> demandMaxDist(schedule->demand_max_low, schedule->demand_max_high);
-
-        // Sample supply & demand ranges
-        int sMin = supplyMinDist(gen);
-        int sMax = supplyMaxDist(gen);
-        int dMin = demandMinDist(gen);
-        int dMax = demandMaxDist(gen);
-
-        // For each second in real time 
-        double total_seconds = simulation->time();
-
-        for (int current_second = 0; current_second < (int)total_time; ++current_second) 
-        { 
-            int offset_value = 0; 
-            if(!events.empty()) { 
-                offset_value = realWorldScheduleOffset(current_second, total_time, events); 
+        if (stat("logs/injectors", &info) != 0) {
+            if (mkdir("logs/injectors", 0777) != 0) {
+                std::cerr << "Error: Failed to create logs/injectors directory.\n";
+            } else {
+                std::cout << "Created logs/injectors directory..." << "\n";
             }
-            else { 
-                offset_value = scheduleOffset(current_second);
-            }
-
-            // Randomly decide side or do a 50/50 e.g. if even => BID, if odd => ASK. Could be random - CHECK TBSE.PY
-            // TBSE.PY - SENDS 3 BUY ADN 3 SELL ORDERS EVERY SECOND. MINE JUST GENERATES BUYS/SELLS BASED ON ODD/EVEN TIME SECOND. PERHAPS LATER FIX.
-            Order::Side side = (current_second % 2 == 0) ? Order::Side::BID : Order::Side::ASK; 
-
-            // Pick a base limit from the supply and demand
-            // SELL => pick from [sMin, sMax], BUY => pick from [dMin, dMax]
-            int base_price = 0;
-            if (side == Order::Side::ASK) { 
-                std::uniform_int_distribution<> dist(sMin, sMax);
-                base_price = dist(gen);
-            }
-            else { 
-                std::uniform_int_distribution<> dist(dMin, dMax);
-                base_price = dist(gen);
-            }
-
-            int final_price = base_price + offset_value;
-            if (final_price < 1) final_price = 1; 
-            if (final_price > 9999) final_price = 9999;
-
-            // Create the limit order
-            LimitOrderMessagePtr order_msg = std::make_shared<LimitOrderMessage>();
-            order_msg->sender_id = 999; // Orchestrator 
-            order_msg->ticker = ticker; 
-            order_msg->side = side; // SIDE
-            order_msg->quantity = 100; 
-            order_msg->price = final_price;
-            order_msg->time_in_force = Order::TimeInForce::GTC;
-            order_msg->agent_name = "Orchestrator";
-
-
-            // Send limit order to exchange
-            this->sendMessageTo(std::to_string(exchange_id), std::static_pointer_cast<Message>(order_msg));
-            std::cout << "Orchestrator sent order to exchange " << std::endl;
-
-            // Variability every second
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-
-        std::cout << "[Orchestrator] Finished generating offset-based orders.\n";
+    
+        std::string log_path = "logs/injectors/injector_" + port + ".log"; // Use "injector" in the filename
+        std::string command = "nohup ./simulation node --port " + port + " > " + log_path + " 2>&1 &";
+        
+        std::cout << "Launching " << injector_type << " injector at: " << addr 
+                  << " (log: " << log_path << ")" << "\n";
+        int ret = system(command.c_str());
+        if (ret != 0) {
+            std::cerr << "Failed to launch " << injector_type << " injector at: " << addr << "\n";
+        }
     }
 
 private:

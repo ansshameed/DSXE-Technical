@@ -41,6 +41,7 @@ BOOST_CLASS_EXPORT(ExchangeConfig);
 BOOST_CLASS_EXPORT(TraderConfig);
 BOOST_CLASS_EXPORT(ArbitrageurConfig);
 BOOST_CLASS_EXPORT(MarketWatcherConfig);
+BOOST_CLASS_EXPORT(OrderInjectorConfig);
 BOOST_CLASS_EXPORT(ZIPConfig);
 
 BOOST_CLASS_EXPORT(ConfigMessage);
@@ -197,7 +198,7 @@ std::string NetworkEntity::handleMessage(std::string_view sender_adress, unsigne
     {
         std::cout << "Failed to deserialise message from " << sender_adress << "\n";
         std::cout << "Reason: " << e.what() << "\n";
-        std::cout << "Message " << message << "\n";
+        //std::cout << "Message " << message << "\n";
     }
 
     return std::string{};

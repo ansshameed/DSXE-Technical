@@ -12,7 +12,9 @@
 #include "networking/networkentity.hpp"
 
 #include "agent/stockexchange.hpp"
+#include "agent/orderinjectoragent.hpp"
 #include "agent/marketdatawatcher.hpp"
+#include "agent/orchestratoragent.hpp"
 #include "agent/traderzic.hpp"
 #include "agent/tradershvr.hpp"
 #include "agent/traderrsi.hpp"
@@ -55,6 +57,7 @@ std::string showLocalUsage() {
     ss << "  " << "exchange" << "\t" << "multithreaded stock exchange implementation" << "\n";
     ss << "  " << "zip" << "\t\t" << "zero intelligence plus trader" << "\n";
     ss << "  " << "watcher" << "\t" << "live market data watcher" << "\n";
+    ss << "  " << "orderinjector" << "\t" << "order injector for exchange" << "\n";
     ss << "  " << "zic" << "\t\t" << "zero intelligence constrained trader" << "\n";
     ss << "  " << "shvr" << "\t\t" << "shaver trader" << "\n";
     ss << "  " << "rsi" << "\t\t" << "relative strength indicator trader" << "\n";
@@ -117,6 +120,18 @@ void local_runner(int argc, char** argv)
 
         std::shared_ptr<StockExchange> exchange (new StockExchange{&entity, config});
         entity.setAgent(std::static_pointer_cast<Agent>(exchange));
+        entity.start();
+    }
+    if (agent_type == "orderinjector") 
+    {   
+        OrderInjectorConfigPtr config = std::make_shared<OrderInjectorConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+
+        std::shared_ptr<OrderInjectorAgent> orderinjector (new OrderInjectorAgent{&entity, config});
+        entity.setAgent(std::static_pointer_cast<Agent>(orderinjector));
         entity.start();
     }
     else if (agent_type == "watcher") {
