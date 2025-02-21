@@ -266,7 +266,8 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        int quantity = getRandomOrderSize();
+        //int quantity = getRandomOrderSize();
+        int quantity = 100; 
 
         double price_adjustment = 0.001 * vwap_price; // 0.1% price adjustment for slippage
         double price = (side == Order::Side::BID) ? (vwap_price + price_adjustment) // If BID then increase price slightly, else decrease price slightly (ASK)

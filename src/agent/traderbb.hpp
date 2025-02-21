@@ -173,7 +173,8 @@ private:
             last_accepted_order_id_ = std::nullopt; // Reset last accepted order ID
         }
 
-        int quantity = getRandomOrderSize(); // Get random order size
+        //int quantity = getRandomOrderSize(); // Get random order size
+        int quantity = 100; 
         
         // Fix the price calculation: use a small adjustment instead of multiplying
         double price_adjustment = 0.002 * band_price; // 0.2% of price as slippage. Slippage = difference between expected price and actual price

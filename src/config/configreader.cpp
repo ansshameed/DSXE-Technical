@@ -502,15 +502,19 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
                     std::cout << "Assigning trader " << agent_id << " to port " << port << std::endl;
                     std::cout << "Trader name " << trader_string_name << " with side " << side << std::endl;
                     std::string addr = "127.0.0.1:" + std::to_string(port++);
-                    if (type == AgentType::TRADER_ZIP)
-                    { 
-                        trader_configs.push_back(configureTraderZIPFromCSV(
-                                agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map, trader_string_name));
-                    }
-                    else { 
-                        trader_configs.push_back(configureTraderFromCSV(
-                            agent_id++, addr, default_exchange_name, default_ticker, type, side, exchange_addrs_map, trader_string_name));
-                    } 
+                    std::function<AgentConfigPtr(void)> configFunc =
+                    (type == AgentType::TRADER_ZIP)
+                    ? std::function<AgentConfigPtr(void)>([&]() -> AgentConfigPtr {
+                        return configureTraderZIPFromCSV(
+                            agent_id++, addr, default_exchange_name, default_ticker,
+                            type, side, exchange_addrs_map, trader_string_name);
+                    })
+                    : std::function<AgentConfigPtr(void)>([&]() -> AgentConfigPtr {
+                        return configureTraderFromCSV(
+                            agent_id++, addr, default_exchange_name, default_ticker,
+                            type, side, exchange_addrs_map, trader_string_name);
+                    });
+                trader_configs.push_back(configFunc());
                 }
             }
         }

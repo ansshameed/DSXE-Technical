@@ -242,8 +242,8 @@ private:
             last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
         }
 
-        //int quantity = 100; //Order fixed at 100 quantity
-        int quantity = getRandomOrderSize(); // Use random order size
+        int quantity = 100; //Order fixed at 100 quantity
+        //int quantity = getRandomOrderSize(); // Use random order size
         double price = getQuotePrice(side); //Get quote price based on trading side (BID or ASK)    
         placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_); //Place limit order on exchange
 

@@ -224,7 +224,8 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        int quantity = getRandomOrderSize();
+        //int quantity = getRandomOrderSize();
+        int quantity = 100; 
 
         double price_adjustment = 0.002 * band_price; // 0.2% of price as slippage. Slippage = difference between expected price and actual price
         double price = (side == Order::Side::BID) ? (band_price + price_adjustment) // If BID then increase price slightly, else decrease price slightly (ASK)
