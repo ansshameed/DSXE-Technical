@@ -55,14 +55,14 @@ public:
         activelyTrade();
     }
 
-    void onTradingEnd() override
-    {
-        std::unique_lock<std::mutex> lock(mutex_);
-        sendProfitToExchange(); 
+    void onTradingEnd() override {
+        {
+            std::unique_lock<std::mutex> lock(mutex_);
+            is_trading_ = false;
+        } 
+        sendProfitToExchange();
         std::cout << "Trading window ended.\n";
         std::cout << "Final profit: " << balance << "\n";
-        is_trading_ = false;
-        lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
