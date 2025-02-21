@@ -50,6 +50,8 @@ public:
                 // Allow exchanges to initialise first
                 std::this_thread::sleep_for(std::chrono::seconds(10));
 
+                generateCustomerOrders(simulation); // Generate customer orders for S/D variability.
+
                 // Initialise traders
                 for (auto trader_config : simulation->traders())
                 {   
@@ -71,8 +73,6 @@ public:
                                 << std::endl;
                     configureNode(watcher_config);
                 }
-
-                generateCustomerOrders(simulation); // Generate customer orders for S/D variability.
 
                 // Wait for this trial to finish before starting the next one
                 std::cout << "Simulation " << i << " configured." << std::endl;
@@ -222,11 +222,11 @@ public:
             int base_price = 0;
             if (side == Order::Side::ASK) { 
                 std::uniform_int_distribution<> dist(sMin, sMax);
-                int base_price = dist(gen);
+                base_price = dist(gen);
             }
             else { 
                 std::uniform_int_distribution<> dist(dMin, dMax);
-                int base_price = dist(gen);
+                base_price = dist(gen);
             }
 
             int final_price = base_price + offset_value;

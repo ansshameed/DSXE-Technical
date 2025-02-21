@@ -94,6 +94,11 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
 {
     LimitOrderPtr order = order_factory_.createLimitOrder(msg);
 
+    if(order->sender_id == 999 || order->agent_name == "Orchestrator") { 
+        getOrderBookFor(order->ticker)->addOrder(order);
+        return; 
+    }
+
     if (crossesSpread(order))
     {
         if (order->time_in_force == Order::TimeInForce::FOK)
