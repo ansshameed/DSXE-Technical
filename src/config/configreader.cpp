@@ -478,7 +478,7 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
 
         // Validate exactly 10 agents (tokens). 
         if (tokens.size() != 10) {
-            throw std::runtime_error("Invalid CSV format: each line must contain exactly 9 comma-separated values.");
+            throw std::runtime_error("Invalid CSV format: each line must contain exactly 10 comma-separated values.");
         }
 
         // Process each token

@@ -61,6 +61,9 @@ public:
                     configureNode(trader_config);
                 }
 
+                // Allow traders to initialise first
+                std::this_thread::sleep_for(std::chrono::seconds(5));
+
                 // Initialise watchers
                 for (auto watcher_config : simulation->watchers())
                 {
@@ -73,6 +76,9 @@ public:
                                 << std::endl;
                     configureNode(watcher_config);
                 }
+
+                // Allow watcher to initialise first
+                std::this_thread::sleep_for(std::chrono::seconds(2));
 
                 // Wait for this trial to finish before starting the next one
                 std::cout << "Simulation " << i << " configured." << std::endl;
@@ -184,7 +190,7 @@ public:
         auto exchange_config = simulation->exchanges().front(); 
         std::string exchange_addr = exchange_config->addr;
         int exchange_id = exchange_config->agent_id;
-        std::string ticker = exchange_config->tickers.front(); 
+        std::string ticker = exchange_config->tickers.front();
 
         // Decide supply & demand ranges 
         std::random_device rd; 
@@ -245,10 +251,8 @@ public:
 
 
             // Send limit order to exchange
-            this->connect(exchange_addr, std::to_string(exchange_id), [=, this](){
-                this->sendMessageTo(std::to_string(exchange_id), std::static_pointer_cast<Message>(order_msg));
-            });
-
+            this->sendMessageTo(std::to_string(exchange_id), std::static_pointer_cast<Message>(order_msg));
+            std::cout << "Orchestrator sent order to exchange " << std::endl;
 
             // Variability every second
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
