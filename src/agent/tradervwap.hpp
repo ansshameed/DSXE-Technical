@@ -167,7 +167,6 @@ private:
 
         double price = getQuotePrice(rounded_vwap, best_bid, best_ask, trader_side_);
 
-
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
         std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
                 << " " << quantity << " @ " << price 
@@ -178,30 +177,31 @@ private:
     double getQuotePrice(double rounded_vwap, double best_bid, double best_ask, Order::Side trader_side_)
     {
         double price; 
-
-        if (trader_side_ == Order::Side::BID)
-        {
-            if (rounded_vwap < best_ask){ 
-                price = best_ask + 1; 
-            }
-            else { 
-                price = best_ask - 1; 
-            }
-        }
-        else
-        {
-            if (rounded_vwap > best_bid) {
-                price = best_bid - 1;
-            } 
-            else { 
-                price = best_bid + 1;
-            }
-        }
-
         double slippage = getRandom(-1, 1); // Small variation in price
-        price += slippage;
 
-        return price;
+        if (trader_side_ == Order::Side::BID) // Buyer logic
+        {
+            if (rounded_vwap > best_ask) {  // Bullish
+                price = best_bid + 1 + slippage;
+            }
+            else { // Bearish
+                price = best_bid + slippage; // No aggressive adjustment
+            }
+
+            return std::min(price, limit_price_);
+        }
+
+        else // Seller logic
+        {
+            if (rounded_vwap < best_bid) { // Bearish
+                price = best_ask - 1 + slippage; 
+            } 
+            else { // Bullish
+                price = best_ask + slippage; // No aggressive adjustment
+            }
+
+            return std::max(price, limit_price_);
+        }
     }
 
     void reactToMarket(MarketDataMessagePtr msg)
