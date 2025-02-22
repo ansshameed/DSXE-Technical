@@ -7,18 +7,14 @@
     <instances>
         <instance ip="127.0.0.1" port="9999" agent-type="exchange"/>
         <instance ip="127.0.0.1" port="8087" agent-type="watcher"/>
-        <instance ip="127.0.0.1" port="8088" agent-type="orderinjector"/>
     </instances>
     <agents>
         <exchanges>
-            <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="120"/>
+            <exchange name="NYSE" ticker="AAPL" connect-time="30" trading-time="40"/>
         </exchanges>
         <watchers>
             <watcher exchange="NYSE" ticker="AAPL"/>
         </watchers>
-        <orderinjectors> 
-            <orderinjector exchange="NYSE" ticker="AAPL"/>
-        </orderinjectors>
     </agents>
 </simulation>
 

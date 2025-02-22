@@ -2,16 +2,7 @@
 #define TRADER_SHVR_HPP
 
 #include "traderagent.hpp"
-#include <thread>
-#include <mutex>
-#include <random>
-#include <chrono>
-#include <vector>
-#include "../utilities/syncqueue.hpp"
 #include "../message/profitmessage.hpp"
-
-#include <iostream> // to print full profitability
-#include <iomanip>
 
 class TraderShaver : public TraderAgent
 {
@@ -23,8 +14,7 @@ public:
       ticker_{config->ticker},
       trader_side_{config->side},
       limit_price_{config->limit}
-    {   
-
+    {
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -36,16 +26,6 @@ public:
 
     std::string getAgentName() const override { return "SHVR"; }
 
-    void terminate() override
-    {
-        if (trading_thread_ != nullptr)
-        {
-            trading_thread_->join();
-            delete(trading_thread_);
-        }
-        TraderAgent::terminate();
-    }
-
     void onTradingStart() override
     {
         std::cout << "Trading window started.\n";
@@ -53,39 +33,26 @@ public:
     }
 
     void onTradingEnd() override
-    {    
-        is_trading_ = false;
+    {   
         sendProfitToExchange();
+        is_trading_ = false;
         std::cout << "Trading window ended.\n";
-        std::cout << "Final profit: " << balance << "\n";
-
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {   
-        std::unique_lock<std::mutex> lock(mutex_);
-        if (!is_trading_) 
-        { 
-            return; 
-        }
-        lock.unlock(); 
-
         std::cout << "Received market data from " << exchange << "\n";
         int quantity = 100;
- 
-        //int quantity = getRandomOrderSize(); // Use random order size 
-        double price = getShaverPrice(msg);
-        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
+        if (is_trading_) 
+        {
+            double price = getShaverPrice(msg);
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
+        }
     }
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
-    {
-        // Order added to order book
-        if (msg->order->status == Order::Status::NEW)
-        {
-            last_accepted_order_id_ = msg->order->id;
-        }
+    {   
 
         if (msg->trade) { 
             // Cast to LimitOrder if needed
@@ -96,8 +63,8 @@ public:
             bookkeepTrade(msg->trade, limit_order);
         }
 
-        //std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
-        //" Qty remaining = " << msg->order->remaining_quantity << "\n";
+        std::cout << "Received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << 
+        " Qty remaining = " << msg->order->remaining_quantity << "\n";
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
@@ -115,7 +82,6 @@ private:
         sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(profit_msg), true);
     }
 
-
     double getShaverPrice(MarketDataMessagePtr msg)
     {
         if (trader_side_ == Order::Side::BID)
@@ -130,42 +96,15 @@ private:
         }
     }
 
-    void sleep()
-    {
-        std::uniform_real_distribution<> dist(-REL_JITTER, REL_JITTER);
-        unsigned long jitter = dist(random_generator_);
-        unsigned long sleep_time_ms = std::round(trade_interval_ms_ * (1.0 + jitter));
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
-    }
-
     std::string exchange_;
     std::string ticker_;
     Order::Side trader_side_;
     double limit_price_;
-    unsigned int trade_interval_ms_ ; 
 
     bool is_trading_ = false;
 
     constexpr static double MIN_PRICE = 1.0;
     constexpr static double MAX_PRICE = 200.0;
-    constexpr static double REL_JITTER = 0.25;
-
-    std::optional<int> last_accepted_order_id_ = std::nullopt;
-
-    // Profitability parameters 
-    struct Trade { 
-        double price;
-        int quantity;
-        Order::Side side;
-    }; 
-    std::vector<Trade> executed_trades_; 
-    double total_profit_ = 0.0;
-
-    // Mutex and Actively Trade attributes mechanism
-    std::mt19937 random_generator_;
-    std::mutex mutex_;
-    std::thread* trading_thread_ = nullptr;
-
 };
 
 #endif

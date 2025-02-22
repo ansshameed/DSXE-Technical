@@ -55,7 +55,7 @@ public:
                 {   
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     launchTraderProcess(trader_config->addr, to_string(trader_config->type));
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait for traders to launch
+                    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for traders to launch
                     configureNode(trader_config);
                 }
 

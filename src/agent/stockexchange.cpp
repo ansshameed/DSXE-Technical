@@ -12,7 +12,7 @@
 #include <iomanip>
 
 void StockExchange::start()
-{
+{ 
     // Create a Matching Engine Thread
     matching_engine_thread_ = new std::thread(&StockExchange::runMatchingEngine, this);
     
@@ -368,6 +368,9 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
 
             // Store the profit by trader name
             agent_profits_by_name_[profit_msg->agent_name] += profit_msg->profit; // Store profits by agent name
+
+            received_profit_traders_.insert(profit_msg->sender_id);
+
             std::cout << "Received profit message from " << profit_msg->agent_name
                       << " | Profit: " << std::fixed << std::setprecision(2) << profit_msg->profit << "\n"; // Print profits to terminal
             break;
@@ -399,6 +402,10 @@ void StockExchange::onSubscribe(SubscribeMessagePtr msg)
     {
         std::cout << "Subscription received: Agent " << msg->sender_id << " (" << msg->agent_name << ") subscribed to " << msg->ticker << " at address " << msg->address << "\n";
         addSubscriber(msg->ticker, msg->sender_id, msg->address);
+        if (msg->agent_name != "OrderInjector" && msg->agent_name != "MarketDataWatcher") {
+            expected_trader_count_++;
+            std::cout << "Trader Count ++ : " << expected_trader_count_ << "\n"; // DEBUG ONLY
+        }
     }
     else
     {
@@ -611,6 +618,7 @@ void StockExchange::startTradingSession()
     {
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
+
 };
 
 void StockExchange::endTradingSession()
@@ -636,10 +644,19 @@ void StockExchange::endTradingSession()
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(1));
 
-    // Profitability 
-    writeProfitsToCSV(); // Write profit to CSV - WRONG
+    auto start_time = std::chrono::steady_clock::now();
+    while (received_profit_traders_.size() < expected_trader_count_) 
+    {  
+        if (std::chrono::steady_clock::now() - start_time > std::chrono::seconds(5)) {
+            std::cout << "Timeout reached, only received profits from " 
+                      << received_profit_traders_.size() << " / " << expected_trader_count_ << " traders.\n";
+            break;  // Don't block indefinitely
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Wait for profits
+    }
+
+    writeProfitsToCSV();
 };
 
 void StockExchange::writeProfitsToCSV()
@@ -647,8 +664,7 @@ void StockExchange::writeProfitsToCSV()
     std::vector<std::pair<std::string, double>> sorted_profits(
         agent_profits_by_name_.begin(), agent_profits_by_name_.end()); // Copy aggregated profits to vector
 
-    std::sort(sorted_profits.begin(), sorted_profits.end(),
-              [](const auto& a, const auto& b) { return a.first < b.first; }); // Sort profits by agent name
+        std::sort(sorted_profits.begin(), sorted_profits.end(), [](const auto& a, const auto& b) { return a.second > b.second; }); 
     
     // Write each profit snapshot row to the CSV file
     for (const auto& [ticker, writer] : profits_writer_) { // Iterate through all profit writers

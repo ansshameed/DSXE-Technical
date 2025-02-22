@@ -6,9 +6,6 @@
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
 
-#include <iostream> // to print full profitability
-#include <iomanip>
-
 /** Prototype ZIC trader implementation. */
 class TraderZIC : public TraderAgent
 {
@@ -24,8 +21,7 @@ public:
       trade_interval_ms_{config->trade_interval},
       random_generator_{std::random_device{}()},
       mutex_{}
-    {   
-
+    {
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -55,25 +51,17 @@ public:
         activelyTrade();
     }
 
-    void onTradingEnd() override {
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            is_trading_ = false;
-        } 
+    void onTradingEnd() override
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        std::cout << "Final profit: " << balance << "\n";
+        is_trading_ = false;
+        lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        if (!is_trading_) 
-        { 
-            return; 
-        }
-        lock.unlock(); 
-        
         std::cout << "Received market data from " << exchange << "\n";
     }
 
@@ -148,9 +136,10 @@ private:
                 lock.lock();
             }
             lock.unlock();
+
             std::cout << "Finished actively trading.\n";
         });
-    } 
+    }
 
     void sleep()
     {
@@ -172,7 +161,6 @@ private:
         }
 
         int quantity = 100;
-        //int quantity = getRandomOrderSize();
         double price = getRandomPrice();
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
 

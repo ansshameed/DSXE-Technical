@@ -5,6 +5,7 @@
 
 #include "traderagent.hpp"
 #include "../config/zipconfig.hpp"
+#include "../message/profitmessage.hpp"
 
 /** Real-time implementation of the ZIP trading algorithm. */
 class TraderZIP : public TraderAgent
@@ -49,7 +50,7 @@ public:
     }
 
     void onTradingStart() override
-    {   
+    {
         std::cout << "Trading window started.\n";
         next_undercut_timestamp_ = timeNow() + (liquidity_interval_ms_ * MS_TO_NS);
         next_lower_margin_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
@@ -57,25 +58,18 @@ public:
         activelyTrade();
     }
 
-    void onTradingEnd() override {
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            is_trading_ = false;
-        } 
+    void onTradingEnd() override
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-    std::cout << "Final profit: " << balance << "\n";
+        is_trading_ = false;
+        lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {   
-        std::unique_lock<std::mutex> lock(mutex_);
-        if (!is_trading_) 
-        { 
-            return; 
-        }
-        lock.unlock(); 
-        
+        std::cout << "Received market data from " << exchange << "\n";
         reactToMarket(msg);
     }
 
@@ -90,6 +84,15 @@ public:
         {
             last_accepted_order_id_ = std::nullopt;
             next_lower_margin_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
+        }
+
+        if (msg->trade) { 
+            // Cast to LimitOrder if needed
+            LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
+            if (!limit_order) {
+                throw std::runtime_error("Failed to cast order to LimitOrder.");
+            }
+            bookkeepTrade(msg->trade, limit_order);
         }
     }
 
@@ -149,7 +152,11 @@ private:
                 }
 
                 // Place order
-                placeOrder();
+                try {
+                    placeOrder();
+                } catch (const std::exception& e) {
+                    std::cerr << "ERROR: ZIP Trader crashed with exception: " << e.what() << std::endl;
+                }
 
                 sleep();
 
@@ -167,6 +174,12 @@ private:
         // Only decrease margin, if previous order has not executed within the trade interval
 
         // If trade has occurred
+
+        if (!last_market_data_.has_value()) { 
+            last_market_data_ = msg->data; // Ensure first valid data is stored
+            return;
+        }
+
         if (last_market_data_.has_value() && msg->data->cumulative_volume_traded > last_market_data_.value()->cumulative_volume_traded)
         {
             // And trade price went up
@@ -231,7 +244,12 @@ private:
     }
 
     void undercutCompetition()
-    {
+    {   
+        if (!last_market_data_.has_value()) {
+            std::cout << "No market data available to undercut.\n";
+            return;
+        }
+
         // Undercut competition by adjusting the price towards best competing bid/offer
         if (trader_side_ == Order::Side::BID)
         {
@@ -260,7 +278,12 @@ private:
     }
 
     double getQuotePrice()
-    {
+    {   
+        if (!last_market_data_.has_value()) {
+            std::cout << "No market data available, returning default limit price.\n";
+            return limit_price_; 
+        }
+
         double price = round(limit_price_ * (1 + profit_margin_));
         if (trader_side_ == Order::Side::BID)
         {
@@ -320,8 +343,7 @@ private:
 
         // Place new order with a new price
         last_price_ = getQuotePrice();
-        //int quantity = getRandomOrderSize(); // Use random order size (maybe replace 100 quantity below with random order size)
-        int quantity = 100;
+        int quantity = 100; 
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, last_price_, limit_price_, Order::TimeInForce::GTC, ++last_client_order_id_);
         std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << 100 << " @ " << last_price_ << "\n";
     }
@@ -373,15 +395,6 @@ private:
     constexpr static double REL_JITTER = 0.25;
 
     constexpr static unsigned long MS_TO_NS = 1000000;
-
-    // Profitability parameters 
-    struct Trade { 
-        double price;
-        int quantity;
-        Order::Side side;
-    }; 
-    std::vector<Trade> executed_trades_; 
-    double total_profit_ = 0.0;
 };
 
 #endif

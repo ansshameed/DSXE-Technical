@@ -393,7 +393,7 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     trader_config->exchange_addr = exchange_addrs_map.at(exchange);
 
     trader_config->ticker = ticker;
-    trader_config->limit = 50;  // Default limit value
+    //trader_config->limit = 50;  // Default limit value
     trader_config->delay = 0;   // Default delay value
     trader_config->trade_interval = 1; // Default interval value
     trader_config->cancelling = false; // Default
@@ -406,10 +406,10 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
 
     // Assign a different limit price per trader - DEBUG TO TEST PROFITABILIITY BY TESTING RANDOM LIMIT PRICES
-    //std::uniform_int_distribution<int> dist(40, 60); // Range of limit prices
-    //static std::random_device rd; // Random seed
-    //static std::mt19937 gen(rd()); // Random number generator
-    //trader_config->limit = dist(gen);
+    std::uniform_int_distribution<int> dist(40, 60); // Range of limit prices
+    static std::random_device rd; // Random seed
+    static std::mt19937 gen(rd()); // Random number generator
+    trader_config->limit = dist(gen);
 
     // DEBUG - Print Trader Configuration
     std::cout << "Configuring CSV Trader: ID=" << trader_config->agent_id
@@ -451,7 +451,13 @@ AgentConfigPtr ConfigReader::configureTraderZIPFromCSV(
     zip_config->ticker = ticker;
 
     // Set default values
-    zip_config->limit = 50; 
+
+    std::uniform_int_distribution<int> dist(40, 60); // Range of limit prices
+    static std::random_device rd; // Random seed
+    static std::mt19937 gen(rd()); // Random number generator
+    zip_config->limit = dist(gen);
+
+    //zip_config->limit = 50; 
     zip_config->delay = 0;
     zip_config->trade_interval = 1;
     zip_config->cancelling = false;

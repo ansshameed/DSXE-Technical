@@ -2,6 +2,7 @@
 #define STOCK_EXCHANGE_HPP
 
 #include <random>
+#include <unordered_set>
 
 #include "../agent/agent.hpp"
 #include "../config/exchangeconfig.hpp"
@@ -239,6 +240,10 @@ private:
     SimulationConfigPtr simulation_config_;
 
     std::unordered_map<std::string, double> agent_profits_by_name_;
+
+    /** Count trader configs */
+    int expected_trader_count_;
+    std::unordered_set<int> received_profit_traders_;
 
 };
 
