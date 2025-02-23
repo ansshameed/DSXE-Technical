@@ -288,10 +288,10 @@ private:
 
             for (int i = 0; i < numOrders; ++i) {
                 injectSingleOrder(sMin, sMax, dMin, dMax, offset_value);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+                std::this_thread::sleep_for(std::chrono::seconds(1));
             }
 
-            std::this_thread::sleep_for(std::chrono::seconds(3));
+            std::this_thread::sleep_for(std::chrono::seconds(5));
         }
         std::cout << "[OrderInjector] Finished active injection.\n";
     }
