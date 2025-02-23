@@ -13,6 +13,7 @@ public:
         TRADING_SESSION_END,
         BREAK_START,
         BREAK_END,
+        ORDER_INJECTION_START
     };
 
     EventMessage() : Message(MessageType::EVENT) {};

@@ -592,16 +592,26 @@ void StockExchange::setTradingWindow(int connect_time, int trading_time)
         std::cout << "Waiting for connections for " << connect_time << " seconds..." << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(connect_time));
 
-        // Start trading session 
-        std::cout << "Trading session starts now" << std::endl;
+        // **Phase 1: Order Injection**
+        std::cout << "Starting order injection phase before trading begins...\n";
+        EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
+        for (const auto& [ticker, ticker_subscribers] : subscribers_) {
+            broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(order_inject_start_msg));
+        }
+        
+        std::this_thread::sleep_for(std::chrono::seconds(3));  // Allow OrderInjector to inject orders for 3 seconds
+
+        // **Phase 2: Start Trading Session**
+        std::cout << "Order injection complete. Starting trading session now.\n";
         startTradingSession();
         std::this_thread::sleep_for(std::chrono::seconds(trading_time));
 
-        // End trading session
+        // **Phase 3: End Trading Session**
         endTradingSession();
         std::cout << "Trading session ended.\n";
     });
 }
+
 
 void StockExchange::startTradingSession()
 {

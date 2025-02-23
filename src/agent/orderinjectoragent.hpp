@@ -94,6 +94,48 @@ public:
         }
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::EVENT) {
+            EventMessagePtr eventMsg = std::dynamic_pointer_cast<EventMessage>(message);
+            if (!eventMsg) {
+                throw std::runtime_error("Failed to cast message to EventMessage");
+            }
+
+            if (eventMsg->event_type == EventMessage::EventType::ORDER_INJECTION_START) {
+                std::cout << "[OrderInjector] Received ORDER_INJECTION_START event. Beginning order injection.\n";
+                onTradingStart();
+            } 
+            else if (eventMsg->event_type == EventMessage::EventType::TRADING_SESSION_START) {
+                std::cout << "[OrderInjector] Trading session started. Restarting order injection if needed.\n";
+                {
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    if (!is_injecting_) {  // Restart injection only if it was stopped
+                        is_injecting_ = true;
+                        activelyInject();
+                    }
+                }
+            }
+            else if (eventMsg->event_type == EventMessage::EventType::TRADING_SESSION_END) {
+                std::cout << "[OrderInjector] Trading session ended. Stopping order injection.\n";
+                onTradingEnd();
+            }
+        } 
+        else if (message->type == MessageType::MARKET_DATA) {
+            MarketDataMessagePtr mdMsg = std::dynamic_pointer_cast<MarketDataMessage>(message);
+            if (mdMsg) {
+                std::cout << "[OrderInjector] Received market data broadcast from " << sender << ".\n";
+                onMarketData(sender, mdMsg);
+            }
+        } 
+        else {
+            // Ignore or handle other message types as needed.
+            return;
+        }
+    }
+
+
+
 private:
 
     std::string exchange_;
@@ -246,10 +288,10 @@ private:
 
             for (int i = 0; i < numOrders; ++i) {
                 injectSingleOrder(sMin, sMax, dMin, dMax, offset_value);
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
 
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            std::this_thread::sleep_for(std::chrono::seconds(3));
         }
         std::cout << "[OrderInjector] Finished active injection.\n";
     }

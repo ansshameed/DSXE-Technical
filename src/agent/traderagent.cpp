@@ -76,7 +76,12 @@ void TraderAgent::handleBroadcastFrom(std::string_view sender, MessagePtr messag
                 throw std::runtime_error("Failed to cast message to EventMessage");
             }
 
-            if (msg->event_type == EventMessage::EventType::TRADING_SESSION_START)
+            if (msg->event_type == EventMessage::EventType::ORDER_INJECTION_START)
+            {
+                // Do nothing: Traders should not react to order injection events
+                std::cout << "[TraderAgent] Ignoring ORDER_INJECTION_START event.\n";
+            }
+            else if (msg->event_type == EventMessage::EventType::TRADING_SESSION_START)
             {
                 signalTradingStart();
             }
