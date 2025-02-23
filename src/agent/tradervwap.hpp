@@ -185,7 +185,7 @@ private:
                 price = best_bid + 1 + slippage; 
             }
             else { // Bearish
-                price = best_bid; // No aggressive adjustment
+                price = best_bid + slippage; // No aggressive adjustment
             }
 
             return std::min(price, limit_price_);
@@ -197,7 +197,7 @@ private:
                 price = best_ask - 1 + slippage; 
             } 
             else { // Bullish
-                price = best_ask;  // No aggressive adjustment
+                price = best_ask + slippage;  // No aggressive adjustment
             }
 
             return std::max(price, limit_price_);

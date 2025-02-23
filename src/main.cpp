@@ -271,8 +271,8 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_period = 14; // Example value
-        double std_dev_multiplier = 2.0; // Example value
+        int lookback_period = 20; // Example value
+        double std_dev_multiplier = 1.0; // Example value
 
         std::shared_ptr<TraderBollingerBands> trader (new TraderBollingerBands{&entity, config, lookback_period, std_dev_multiplier});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));

@@ -84,7 +84,7 @@ public:
                                 << std::endl;
                     configureNode(injector_config);
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    //launchOrderInjectorProcess(injector_config->addr, to_string(injector_config->type));
+                    launchOrderInjectorProcess(injector_config->addr, to_string(injector_config->type));
                 }
 
                 // Allow watcher to initialise first
@@ -151,16 +151,7 @@ public:
         }
 
         std::string log_path = "logs/traders/trader_" + port + ".log"; // Set log path
-
-        //if (remove(log_path.c_str()) == 0) { // Clear previous log
-            //std::cout << "Cleared previous log: " << log_path << std::endl; // DEBUG
-        //}
-        //else {  If failed to clear previous log
-            //std::cerr << "Failed to clear previous log: " << log_path << std::endl; // DEBUG
-        //}
-
         std::string command = "nohup ./simulation node --port " + port + " > " + log_path + " 2>&1 &"; // Set command to launch trader process with log
-
         std::cout << "Launching " << trader_type << " trader at: " << addr << " (log: " << log_path << ")" << "\n"; // DEBUG
         
         int ret = system(command.c_str()); // Launch trader process
@@ -171,47 +162,12 @@ public:
     };
 
     void launchOrderInjectorProcess(const std::string& addr, const std::string& injector_type) {
-
-        // Clear logs directory only once (if not already cleared)
-        static bool logsCleared = false;
-        if (!logsCleared) {
-            int clear_logs_ret = system("rm -rf logs/*");
-            if (clear_logs_ret != 0) {
-                std::cerr << "Error: Failed to clear logs directory." << std::endl;
-            } else {
-                std::cout << "Cleared logs directory completely." << std::endl;
-            }
-            logsCleared = true;
-        }
-        
-        std::string port = addr.substr(addr.find(":") + 1); // Extract port
+        std::cout << "Configuring " << injector_type << " injector at: " << addr << "\n";
     
-        // Ensure logs and logs/injectors directory exist
-        struct stat info;
-        if (stat("logs", &info) != 0 || !S_ISDIR(info.st_mode)) {
-            if (mkdir("logs", 0777) != 0) {
-                std::cerr << "Error: Failed to create logs directory.\n";
-            } else {
-                std::cout << "Created logs directory..." << std::endl;
-            }
-        }
-        if (stat("logs/injectors", &info) != 0) {
-            if (mkdir("logs/injectors", 0777) != 0) {
-                std::cerr << "Error: Failed to create logs/injectors directory.\n";
-            } else {
-                std::cout << "Created logs/injectors directory..." << "\n";
-            }
-        }
-    
-        std::string log_path = "logs/injectors/injector_" + port + ".log"; // Use "injector" in the filename
-        std::string command = "nohup ./simulation node --port " + port + " > " + log_path + " 2>&1 &";
-        
-        std::cout << "Launching " << injector_type << " injector at: " << addr 
-                  << " (log: " << log_path << ")" << "\n";
-        int ret = system(command.c_str());
-        if (ret != 0) {
-            std::cerr << "Failed to launch " << injector_type << " injector at: " << addr << "\n";
-        }
+        this->connect(addr, injector_type, [=, this](){
+            ConfigMessagePtr msg = std::make_shared<ConfigMessage>();
+            this->sendMessageTo(injector_type, std::static_pointer_cast<Message>(msg));
+        });
     }
 
 private:

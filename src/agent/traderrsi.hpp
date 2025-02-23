@@ -25,7 +25,7 @@ public:
       random_generator_{std::random_device{}()},
       mutex_{}
     {   
-        use_stoch_rsi_ = true; 
+        use_stoch_rsi_ = false; 
 
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
@@ -127,7 +127,7 @@ private:
                 if (timeNow() >= next_trade_timestamp_) 
                 { 
 
-                    if (!closing_prices_.empty() && closing_prices_.size() >= lookback_)
+                    if (!closing_prices_.empty())
                     { 
                         double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
                         std::cout << "RSI: " << rsi << "\n";
@@ -157,6 +157,7 @@ private:
         std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
 
         closing_prices_.push_back(msg->data->last_price_traded); // Add last price traded from market data to buffer
+
         if (closing_prices_.size() > lookback_) // If buffer exceeds lookback, remove the oldest price
         {
             closing_prices_.erase(closing_prices_.begin());
