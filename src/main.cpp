@@ -290,7 +290,7 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_period = 14; // Example value
+        int lookback_period = 20; // Example value
 
         std::shared_ptr<TraderVWAP> trader (new TraderVWAP{&entity, config, lookback_period});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));

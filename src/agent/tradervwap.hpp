@@ -170,22 +170,22 @@ private:
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
         std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
                 << " " << quantity << " @ " << price 
-                << " (VWAP: " << vwap_price << " | Best Bid: " << best_bid 
+                << " (VWAP: " << rounded_vwap << " | Best Bid: " << best_bid 
                 << " | Best Ask: " << best_ask << ")\n";
     }
 
     double getQuotePrice(double rounded_vwap, double best_bid, double best_ask, Order::Side trader_side_)
     {
         double price; 
-        double slippage = getRandom(-1, 1); // Small variation in price
+        double slippage = std::round(getRandom(-1, 1)); // Small variation in price
 
         if (trader_side_ == Order::Side::BID) // Buyer logic
         {
             if (rounded_vwap > best_ask) {  // Bullish
-                price = best_bid + 1 + slippage;
+                price = best_bid + 1 + slippage; 
             }
             else { // Bearish
-                price = best_bid + slippage; // No aggressive adjustment
+                price = best_bid; // No aggressive adjustment
             }
 
             return std::min(price, limit_price_);
@@ -197,7 +197,7 @@ private:
                 price = best_ask - 1 + slippage; 
             } 
             else { // Bullish
-                price = best_ask + slippage; // No aggressive adjustment
+                price = best_ask;  // No aggressive adjustment
             }
 
             return std::max(price, limit_price_);
@@ -206,8 +206,8 @@ private:
 
     void reactToMarket(MarketDataMessagePtr msg)
     { 
-        double closing_price = msg->data->last_price_traded; // Closing price is the last price traded
-        double volume = msg->data->volume_per_tick; // Volume is the last quantity traded
+        double closing_price = msg->data->last_price_traded; 
+        double volume = msg->data->volume_per_tick; 
 
         {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -219,7 +219,13 @@ private:
         }
 
         last_market_data_ = msg->data;
+
+        // Debugging: Print stored market data
+        std::cout << "[DEBUG] Stored Market Data - Price: " << closing_price 
+                << ", Volume: " << volume 
+                << ", Buffer Size: " << price_volume_data_.size() << "\n";
     }
+
 
     void sleep()
     {

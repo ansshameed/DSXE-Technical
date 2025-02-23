@@ -5,6 +5,7 @@
 #include <numeric>
 #include <algorithm>
 #include "traderagent.hpp"
+#include "../message/profitmessage.hpp"
 
 class TraderRSI : public TraderAgent
 {
@@ -19,13 +20,13 @@ public:
       lookback_{lookback},
       cancelling_{config->cancelling},
       trade_interval_ms_{config->trade_interval}, 
-      use_stoch_rsi_{use_stoch_rsi}, // Initialise Stochastic RSI
-      stoch_lookback_{stoch_lookback}, // Initialise Stochastic RSI lookback period
-      n_to_smooth_{n_to_smooth}, // Initialise smoothing factor
+      stoch_lookback_{stoch_lookback}, 
+      n_to_smooth_{n_to_smooth}, // Smoothing factor
       random_generator_{std::random_device{}()},
-      profit_margin_{0.0}, // Initialise profit margin
       mutex_{}
-    {
+    {   
+        use_stoch_rsi_ = true; 
+
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -37,84 +38,37 @@ public:
 
     std::string getAgentName() const override { return "RSI"; }
 
+    void terminate() override
+    {
+        if (trading_thread_ != nullptr)
+        {
+            trading_thread_->join();
+            delete(trading_thread_);
+        }
+        TraderAgent::terminate();
+    }
+
     void onTradingStart() override
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
+        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
-    void onTradingEnd() override {
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            is_trading_ = false;
-        } 
+    void onTradingEnd() override
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        std::cout << "Final profit: " << balance << "\n";
+        is_trading_ = false;
+        lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     { 
-        std::unique_lock<std::mutex> lock(mutex_);
-        if (!is_trading_) 
-        { 
-            return; 
-        }
-        lock.unlock(); 
-
         std::cout << "Received market data from " << exchange << "\n";
-
-        std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
-
-        // Collect closing prices from market data (prices broadcasted; market data received from exchange contains last traded price)
-        closing_prices_.push_back(msg->data->last_price_traded); //rolling list stores most recent closing prices upto lookback period (past 14 closing prices; the last prices traded)
-        if (closing_prices_.size() > lookback_ + 1) //Adds the last price traded from market data to buffer
-        {
-            closing_prices_.erase(closing_prices_.begin()); //If buffer exceeds lookback, remove the oldest price
-        }
-
-        // Calculate RSI (only when no. of closing prices is equal to lookback)
-        if (closing_prices_.size() >= lookback_)
-        {
-            double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
-            std::cout << "RSI: " << rsi << "\n";
-
-            if (use_stoch_rsi_) { // If using Stochastic RSI is activated (true) 
-                // Store RSI values for Stochastic RSI calculation
-                rsi_values_.push_back(rsi);
-
-                if (rsi_values_.size() > stoch_lookback_) {  // If more RSI values than length of Stochastic RSI lookback
-                    rsi_values_.erase(rsi_values_.begin());  // If buffer exceeds lookback, remove the oldest price 
-                }
-
-                // Calculate Stochastic RSI 
-                double stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_); // Calculate Stochastic RSI value based on previously calculated RSI values, Stochastic lookback length and smoothing factor 
-                std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
-
-                if (trader_side_ == Order::Side::BID && stoch_rsi < 20) { // If Stochastic RSI is less than 20 then buy signal generated (oversold) 
-                    std::cout << "Oversold detected, placing BID order\n";
-                    placeOrder(Order::Side::BID); // Oversold condition
-                } 
-                else if (trader_side_ == Order::Side::ASK && stoch_rsi > 80) { // If Stochastic RSI is more than 80 then sell signal generated (overbought) 
-                    std::cout << "Overbought detected, placing ASK order\n";
-                    placeOrder(Order::Side::ASK); // Overbought condition
-                }
-
-            } else {
-                // Implement trading logic based on RSI
-                if (trader_side_ == Order::Side::BID && rsi < 30) //If RSI is less than 30, buy signal is generated (oversold)
-                {
-                    // Buy signal
-                    placeOrder(Order::Side::BID);
-                }
-                else if (trader_side_ == Order::Side::ASK && rsi > 70) //If RSI is greater than 70, sell signal is generated (overbought)
-                {
-                    // Sell signal
-                    placeOrder(Order::Side::ASK);
-                } 
-            }
-        }
+        reactToMarket(msg); 
     }
 
     //Handles execution report received from exchange when status update for order. Msg = param containing order details
@@ -126,6 +80,18 @@ public:
             last_accepted_order_id_ = msg->order->id; //Tracks most recent order successfully added to LOB (can be used later for cancel/modifying)
         }
 
+        if (msg->trade) { 
+            // Cast to LimitOrder if needed
+            std::cout << "Trade Executed! Price: " << msg->trade->price
+                      << " | Quantity: " << msg->trade->quantity
+                      << " | Order ID: " << msg->order->id << std::endl;
+            LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
+            if (!limit_order) {
+                throw std::runtime_error("Failed to cast order to LimitOrder.");
+            }
+            bookkeepTrade(msg->trade, limit_order);
+        }
+
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
@@ -133,7 +99,13 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
-private:
+private:    
+
+    double getRandom(double lower, double upper)
+    {
+        std::uniform_real_distribution<> dist(lower, upper);
+        return dist(random_generator_);
+    }
 
     void sendProfitToExchange()
     {
@@ -152,23 +124,138 @@ private:
             {
                 lock.unlock();
 
+                if (timeNow() >= next_trade_timestamp_) 
+                { 
+
+                    if (!closing_prices_.empty() && closing_prices_.size() >= lookback_)
+                    { 
+                        double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
+                        std::cout << "RSI: " << rsi << "\n";
+                        double stoch_rsi = use_stoch_rsi_ ? calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_) : 50.0; // Neutral stoch RSI if disabled (no overbought/oversold conditions)
+                        std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
+
+                        if (shouldTrade(rsi, stoch_rsi)) 
+                        { 
+                            placeOrder(rsi, stoch_rsi);
+                        }
+                        
+                    }
+
+                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
+                } 
+
                 sleep();
                 lock.lock();
             }
             lock.unlock();
-
             std::cout << "Finished actively trading.\n";
         });
     }
 
+    void reactToMarket(MarketDataMessagePtr msg)
+    {
+        std::cout << "Last price traded: " << msg->data->last_price_traded << "\n";
+
+        closing_prices_.push_back(msg->data->last_price_traded); // Add last price traded from market data to buffer
+        if (closing_prices_.size() > lookback_) // If buffer exceeds lookback, remove the oldest price
+        {
+            closing_prices_.erase(closing_prices_.begin());
+        }
+
+        if (use_stoch_rsi_) 
+        { 
+            double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
+            rsi_values_.push_back(rsi); // Add RSI value to buffer
+
+            if (rsi_values_.size() > stoch_lookback_) // If buffer exceeds lookback, remove the oldest price
+            {
+                rsi_values_.erase(rsi_values_.begin());
+            }
+        }
+
+        last_market_data_ = msg->data; // Store last market data
+    } 
+
+    bool shouldTrade(double rsi, double stoch_rsi) 
+    { 
+        if (use_stoch_rsi_) 
+        { 
+            return (trader_side_ == Order::Side::BID && stoch_rsi < 20) || (trader_side_ == Order::Side::ASK && stoch_rsi > 80);
+        }
+
+        else 
+        { 
+            return (trader_side_ == Order::Side::BID && rsi < 30) || (trader_side_ == Order::Side::ASK && rsi > 70);
+        }
+
+    }
+
+    void placeOrder(double rsi, double stoch_rsi) //Places limit order on exchange 
+    {
+
+        if (cancelling_ && last_accepted_order_id_.has_value()) //Check if cancelling is enabled and last order was accepted
+        {
+            cancelOrder(exchange_, trader_side_, ticker_, last_accepted_order_id_.value()); //Cancel last accepted order
+            last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
+        }
+
+        int quantity = 100; 
+
+        if (!last_market_data_.has_value()) {
+            std::cout << "No market data available, skipping order placement.\n";
+            return;
+        }
+
+        double best_bid = last_market_data_.value()->best_bid; //Get best bid price from market data
+        double best_ask = last_market_data_.value()->best_ask; //Get best ask price from market data
+
+        if (!last_market_data_.has_value() || best_bid <= 0 || best_ask <= 0) {
+            std::cout << "No valid bid/ask data, skipping order placement.\n";
+            return;
+        }
+
+        double price = getQuotePrice(rsi, stoch_rsi, best_bid, best_ask, trader_side_); 
+        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+
+        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " (RSI: " << rsi << " | Best Bid: " << best_bid << " | Best Ask: " << best_ask << ")\n";
+    }
+
+    double getQuotePrice(double rsi, double stoch_rsi, double best_bid, double best_ask, Order::Side trader_side_) 
+    {
+        double price; 
+        double slippage = getRandom(-1, 1); // Small variation in price
+
+        if (trader_side_ == Order::Side::BID)
+        {
+            if (rsi < 30 || stoch_rsi < 20)
+            {
+                price = best_bid + 1 + slippage;
+            }
+            else
+            {
+                price = best_bid + slippage;
+            }
+            return std::min(price, limit_price_);
+        }
+        else
+        {
+            if (rsi > 70 || stoch_rsi > 80)
+            {
+                price = best_ask - 1 + slippage; 
+            } 
+            else
+            {
+                price = best_ask + slippage;
+            }
+            return std::max(price, limit_price_);
+        }
+    }
+
     void sleep()
     {
-        // Generate a random jitter
         std::uniform_real_distribution<> dist(-REL_JITTER, REL_JITTER);
         unsigned long jitter = dist(random_generator_);
         unsigned long sleep_time_ms = std::round(trade_interval_ms_ * (1.0+jitter));
-
-        // Sleep for specified duration
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
     }
 
@@ -179,38 +266,37 @@ private:
             return 50.0; // Neutral RSI
         }
 
-        //double upsum = 1.e-60, dnsm = 1.e-60; //Avoid division by zero. Upsum = sum of upward price movements (gains). Dnsm = sum of downward price movements (losses)
+        //double upsum = 1.e-60, dnsm = 1.e-60; Avoid division by zero. Upsum = sum of upward price movements (gains). Dnsm = sum of downward price movements (losses)
         double upsum = 0.0, dnsm = 0.0;
         size_t initial_calculation_period = std::min(static_cast<size_t>(lookback_), prices.size());
 
-        //Initial calculation of upsum and dnsm (lookback period); initial smoothed averages for upward and downward movements over lookback
-        //RSI initially calculated on lookback period
-        for (size_t i = 1; i < initial_calculation_period; ++i) //Loop through lookback period (14 closing prices)
+        //Initial calculation of upsum and dnsm (lookback period); initial smoothed averages for upward and downward movements over lookback period. 
+        for (size_t i = 1; i < initial_calculation_period; ++i) 
         {
             double diff = prices[i] - prices[i - 1]; //Price difference for each consecutive price pair
-            if (diff > 0.0) //If diff > 0.0 its upward price movement so add diff to upsum
+            if (diff > 0.0) 
                 upsum += diff;
-            else //If diff < 0.0 its downward price movement so add diff to dnsm
+            else
                 dnsm += -diff; 
         }
-        upsum /= (lookback_ - 1); //Average of upward price movements (over lookback period)
-        dnsm /= (lookback_ - 1); //Average of downward price movements (over lookback period)
+
+        // Averages of upward/downard price movements over lookback period
+        upsum /= (lookback_ - 1); 
+        dnsm /= (lookback_ - 1); 
 
         //Processes remaining prices sequentially to dynamically update smoothed averages using exponential smoothing
-        //RSI continuously updated using exponential smoothing (historical trend via upsum and dnsm and the new prices differences)
-        for (size_t i = initial_calculation_period; i < prices.size(); ++i) //Loop through remaining closing prices and update upsum and dnsm (prices after lookback period)
+        for (size_t i = initial_calculation_period; i < prices.size(); ++i) 
         {   
             double diff = prices[i] - prices[i - 1]; //Price difference for each consecutive price pair
-            //std::cout << "Processing price: " << prices[i] << ", Previous price: " << prices[i - 1] << ", Difference: " << diff << "\n"; // Print the price difference
             if (diff > 0.0) //If diff > 0.0 its upward price movement
             {
-                upsum = ((lookback_ - 1) * upsum + diff) / lookback_; //Update upsum using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new gain)
-                dnsm *= (lookback_ - 1.0) / lookback_; //Update dnsm using exponential smoothing. Scales down dnsm to reflect new price difference (new gain)
+                upsum = ((lookback_ - 1) * upsum + diff) / lookback_; 
+                dnsm *= (lookback_ - 1.0) / lookback_;
             }
             else
             {
-                dnsm = ((lookback_ - 1) * dnsm - diff) / lookback_; //Update dnsm using exponential smoothing. Combine historical trend (prev. smoothed avg) with new price difference (new loss)
-                upsum *= (lookback_ - 1.0) / lookback_; //Update upsum using exponential smoothing. Scales down upsum to reflect new price difference (new loss)
+                dnsm = ((lookback_ - 1) * dnsm - diff) / lookback_; //Update dnsm using exponential smoothing. 
+                upsum *= (lookback_ - 1.0) / lookback_; 
             }
         }
         
@@ -218,50 +304,7 @@ private:
            return 50.0;
         } 
 
-        double rsi = 100.0 * (upsum / (upsum + dnsm)); // Calculate RSI; normalises ratio of avg. gains (upsum) to total movement (upsum + dnsm) to 0-100 scale. RSI < 30: oversold, RSI > 70: overbought
-        return rsi; 
-    }
-
-    void placeOrder(Order::Side side) //Places limit order on exchange 
-    {
-
-        //NOTE - COOLDOWN PERIOD: maybe add cooldown period mechanism for when excessive trades happen (only one trade within cooldown period; useful for extreme RSI values i.e. 0 or 100)
-        //std::chrono::steady_clock::time_point last_trade_time_; PRIVATE VARIABLE 
-        //unsigned int cooldown_duration_ms_ = 5000; // Cooldown period in milliseconds (e.g., 5 seconds) PRIVATE VARIABLE 
-        //auto now = std::chrono::steady_clock::now();
-        //if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_trade_time_.count() < cooldown_duration_ms_)
-        //{
-            //std::cout << "Skipping trade due to cooldown period." << std::endl;
-            //return; // Exit function if still in cooldown
-        //}
-
-
-        if (cancelling_ && last_accepted_order_id_.has_value()) //Check if cancelling is enabled and last order was accepted
-        {
-            cancelOrder(exchange_, side, ticker_, last_accepted_order_id_.value()); //Cancel last accepted order
-            last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
-        }
-
-        int quantity = 100; //Order fixed at 100 quantity
-        //int quantity = getRandomOrderSize(); // Use random order size
-        double price = getQuotePrice(side); //Get quote price based on trading side (BID or ASK)    
-        placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_); //Place limit order on exchange
-
-        std::cout << ">> " << (side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n"; //Logs the order
-    }
-
-    double getQuotePrice(Order::Side side) //Adjust for side
-    {
-        double price = round(limit_price_ * (1 + profit_margin_)); //Adjust limit price based on profit margin (positive margin = increase ASK order, negative margin = decrease BID order)
-        if (side == Order::Side::BID) //If BID order, adjust price to be less than limit price
-        {
-            price = std::min(limit_price_, price);
-        }
-        else //If ASK order, adjust price to be greater than limit price 
-        {
-            price = std::max(limit_price_, price);
-        }
-        return price; //Return adjusted price for limit order
+        return 100.0 * (upsum / (upsum + dnsm)); // Calculate RSI value based on smoothed averages of upward and downward price movements
     }
 
     double calculateStochRSI(const std::vector<double>& rsi_values, int stoch_lookback, int n_to_smooth)
@@ -269,15 +312,15 @@ private:
         size_t n = rsi_values.size();
 
         if (n < stoch_lookback) { // If no. of RSI values is less than required stochastic RSI lookback length; avoids error when not enough data 
-            return 50.0; // Handle small buffer with neutral 50 RSI value (neutral)
+            return 50.0; 
         }
 
         std::vector<double> stoch_rsi_values(n, 0.0); // Vector of zeros (same size as RSI values) to store computed S.RSI values
 
-        // Initialize min and max RSI values for lookback period
+        // Initialise min and max RSI values for lookback period
         for (size_t icase = stoch_lookback - 1; icase < n; ++icase) { // Loop through existing RSI values
-            double min_val = 1e60; // Arbitrary high value; extreme values to store the min. and max. RSI values in the lookback period 
-            double max_val = -1e60; // Arbitrary low value
+            double min_val = 1e60; // Arbitrary high value;
+            double max_val = -1e60; 
 
             // Inner loop for lookback2 window
             for (size_t j = icase - stoch_lookback + 1; j <= icase; ++j) { // Loop through stochastic lookback RSI values (sliding window) 
@@ -306,6 +349,12 @@ private:
         return stoch_rsi_values.back(); // Return the latest Stochastic RSI value
     }
 
+    unsigned long long timeNow()
+    {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    }
+
     std::string exchange_;
     std::string ticker_;
     Order::Side trader_side_;
@@ -324,21 +373,16 @@ private:
     std::thread* trading_thread_ = nullptr;
     bool is_trading_ = false;
 
-    double profit_margin_; 
     constexpr static double REL_JITTER = 0.25;
 
     bool use_stoch_rsi_; 
     int stoch_lookback_; 
     int n_to_smooth_; 
 
-    // Profitability parameters 
-    struct Trade { 
-        double price;
-        int quantity;
-        Order::Side side;
-    }; 
-    std::vector<Trade> executed_trades_; 
-    double total_profit_ = 0.0;
+    constexpr static unsigned long MS_TO_NS = 1000000;
+    unsigned long next_trade_timestamp_;
+    std::optional<MarketDataPtr> last_market_data_;
+
 };
 
 #endif
