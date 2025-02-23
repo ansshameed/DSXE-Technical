@@ -207,7 +207,7 @@ private:
     void reactToMarket(MarketDataMessagePtr msg)
     { 
         double closing_price = msg->data->last_price_traded; 
-        double volume = msg->data->volume_per_tick; 
+        double volume = msg->data->last_quantity_traded; 
 
         {
             std::unique_lock<std::mutex> lock(mutex_);
