@@ -328,8 +328,8 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_vwap = 10; // Example value
-        int lookback_obv = 6; // Example value
+        int lookback_vwap = 14; // Example value
+        int lookback_obv = 10; // Example value
         int delta_length = 3; // Example values
         double threshold = 2; // Example values
 

@@ -34,80 +34,37 @@ public:
 
     std::string getAgentName() const override { return "OBV Delta"; }
 
+    void terminate() override
+    {
+        if (trading_thread_ != nullptr)
+        {
+            trading_thread_->join();
+            delete(trading_thread_);
+        }
+        TraderAgent::terminate();
+    }
+
     void onTradingStart() override
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
+        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
-    void onTradingEnd() override {
-        {
-            std::unique_lock<std::mutex> lock(mutex_);
-            is_trading_ = false;
-        } 
+    void onTradingEnd() override
+    {
+        std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        std::cout << "Final profit: " << balance << "\n";
+        is_trading_ = false;
+        lock.unlock();
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
-        std::unique_lock<std::mutex> lock(mutex_);
-        if (!is_trading_) 
-        { 
-            return; 
-        }
-        lock.unlock();
-
         std::cout << "Received market data from " << exchange << "\n";
-
-        if (!msg || !msg->data) { // Check if exchange message received contains valid data (not null)
-            std::cerr << "ERROR: Received null market data message!" << std::endl;
-            return;
-        }
-        
-        close_prices_.push_back(msg->data->last_price_traded); // Add the last traded price to the list of prices (close prices) 
-        volumes_.push_back(msg->data->volume_per_tick); // Add the volume traded in the last tick to the list of volumes
-        std::cout << "DEBUG: Current Volume: " << msg->data->volume_per_tick << "\n";
-
-        if (close_prices_.size() < lookback_length_ || volumes_.size() < lookback_length_) { // Ensures no. of close prices and volume ticks as long as lookback length
-            std::cerr << "WARNING: Not enough data yet! Needed: " << lookback_length_ // If not enough data then log warning and return
-                    << ", Current: " << close_prices_.size() << std::endl;
-            return;
-        }
-
-        if (volumes_.empty()) { // Skip order when no volume 
-        std::cerr << "Skipping order: No volume data available." << std::endl;
-        return;
-        }
-
-        if (volumes_.back() == 0 && volumes_.size() > 1) { // If volume == 0 then use last non-zero volume 
-            std::cerr << "Using last nonzero volume: " << volumes_[volumes_.size() - 2] << "\n";
-            volumes_.back() = volumes_[volumes_.size() - 2]; // Use last valid volume
-        }
-
-        //delta = Change in OBV over specified period (delta_length)
-        auto delta_obv = calculateDeltaOBV(close_prices_, volumes_, lookback_length_, delta_length_); // Calculate OBV Delta 
-
-        if (delta_obv.empty()) { // If OBV Delta empty then log error and return. Order not placed
-            std::cerr << "ERROR: delta_obv is empty!" << std::endl;
-            return;
-        }
-
-        // Threshold = Dynamically adjusted OBV Delta limit to determine when trade should be executed. Lower threshold = more trades (more sensitive) 
-        threshold_ = std::max(50.0, threshold_ * (1.0 - 0.02 * (volumes_.back() / 100.0))); // Adjust threshold dynamically based on last trading volume. Decreases slightly when volume increases, never goes below 50. 
-
-        double latest_delta_obv = delta_obv.back(); 
-
-        if (latest_delta_obv > threshold_ && trader_side_ == Order::Side::BID) // If OBV Delta above threshold, place bid
-        {
-            placeOrder(Order::Side::BID);
-        }
-        else if (latest_delta_obv < -threshold_ && trader_side_ == Order::Side::ASK) // If OBV Delta below negative threshold, place ask
-        {
-            placeOrder(Order::Side::ASK);
-        }
+        reactToMarket(msg);
 
     }
 
@@ -116,6 +73,16 @@ public:
         if (msg->order->status == Order::Status::NEW)
         {
             last_accepted_order_id_ = msg->order->id;
+        }
+
+        if (msg->trade) { 
+            // Cast to LimitOrder if needed
+            std::cout << "Trade Executed! Price: " << msg->trade->price << " | Quantity: " << msg->trade->quantity << " | Order ID: " << msg->order->id << std::endl;
+            LimitOrderPtr limit_order = std::dynamic_pointer_cast<LimitOrder>(msg->order);
+            if (!limit_order) {
+                throw std::runtime_error("Failed to cast order to LimitOrder.");
+            }
+            bookkeepTrade(msg->trade, limit_order);
         }
 
     }
@@ -127,6 +94,12 @@ public:
 
 private:
 
+    double getRandom(double lower, double upper)
+    {
+        std::uniform_real_distribution<> dist(lower, upper);
+        return dist(random_generator_);
+    }
+
     void sendProfitToExchange()
     {
         ProfitMessagePtr profit_msg = std::make_shared<ProfitMessage>();
@@ -137,43 +110,147 @@ private:
 
     void activelyTrade()
     {
-        trading_thread_ = new std::thread([&, this](){
+        trading_thread_ = new std::thread([&, this]()
+        {
             std::unique_lock<std::mutex> lock(mutex_);
             while (is_trading_)
             {
                 lock.unlock();
+                if (timeNow() >= next_trade_timestamp_)
+                {
+                    if (close_prices_.size() >= lookback_length_ && volumes_.size() >= lookback_length_)
+                    {
+                        std::vector<double> delta_obv_values = calculateOBVDelta();  
+
+                        if (!delta_obv_values.empty())  
+                        {
+                            double delta_obv = delta_obv_values.back();  
+                            placeOrder(delta_obv);
+                        }
+                        else
+                        {
+                            std::cerr << "ERROR: OBV Delta vector is empty! No order placed.\n";
+                        }
+                    }
+                    else
+                    {
+                        std::cout << "Not enough data to place an order.\n";
+                    }
+
+                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
+                }
                 sleep();
                 lock.lock();
             }
             lock.unlock();
-            std::cout << "Finished actively trading.\n";
         });
     }
 
-    void sleep()
+    void reactToMarket(MarketDataMessagePtr msg)
     {
-        std::uniform_real_distribution<> dist(-REL_JITTER, REL_JITTER);
-        unsigned long jitter = dist(random_generator_);
-        unsigned long sleep_time_ms = std::round(trade_interval_ms_ * (1.0 + jitter));
-        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
-    }
-
-    std::vector<double> calculateDeltaOBV(const std::vector<double>& close_prices, 
-                                      const std::vector<double>& volumes, 
-                                      int lookback_length, 
-                                      int delta_length)
-    {   
-        size_t n = close_prices.size(); // No. of closing prices (ticks)
-        if (n < lookback_length || volumes.size() < lookback_length) { // If no. of prices or volume ticks less than lookback length then throw exception
-            throw std::invalid_argument("Insufficient data for the given lookback length.");
+        if (!msg || !msg->data)
+        {
+            std::cout << "[ERROR] Invalid market data received.\n";
+            return;
         }
 
-        std::vector<double> output(n, 0.0); // Create vector of zeros with size n (no. of closing prices)
-        size_t front_bad = lookback_length; // Stores first index where OBV can be calculated (initially set to lookback length). Ensures calculation can skip leading zero-volume entires and start from first valid volume data
+        double price = msg->data->last_price_traded;
+        double volume = msg->data->last_quantity_traded;
+
+        if (price <= 0 || volume < 0)
+        {
+            std::cout << "[ERROR] Invalid market price or volume received.\n";
+            return;
+        }
+
+        close_prices_.push_back(price);
+        volumes_.push_back(volume);
+
+        if (close_prices_.size() > lookback_length_)
+            close_prices_.erase(close_prices_.begin());
+
+        if (volumes_.size() > lookback_length_)
+            volumes_.erase(volumes_.begin());
+
+        last_market_data_ = msg->data;
+    }
+
+    void placeOrder(double delta_obv)
+    {
+        if (!last_market_data_.has_value() || last_market_data_.value()->best_bid <= 0 || last_market_data_.value()->best_ask <= 0)
+        {
+            std::cout << "No valid bid/ask data, skipping order placement.\n";
+            return;
+        }
+
+        if (cancelling_ && last_accepted_order_id_.has_value())
+        {
+            cancelOrder(exchange_, trader_side_, ticker_, last_accepted_order_id_.value());
+            last_accepted_order_id_ = std::nullopt;
+        }
+
+        int quantity = 100;
+        double best_bid = last_market_data_.value()->best_bid;
+        double best_ask = last_market_data_.value()->best_ask;
+
+        if ((delta_obv > threshold_ && trader_side_ == Order::Side::BID) || (delta_obv < -threshold_ && trader_side_ == Order::Side::ASK))
+        {
+            double price = getQuotePrice(delta_obv, best_bid, best_ask, trader_side_);
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+        }
+        else
+        {
+            std::cout << "Trade conditions NOT met. No order placed.\n";
+        }
+    }
+
+
+    double getQuotePrice(double delta_obv, double best_bid, double best_ask, Order::Side trader_side_)
+    {
+        double price;
+        double slippage = getRandom(-1, 1);
+
+        if (trader_side_ == Order::Side::BID)
+        {
+            if (delta_obv > threshold_ && best_bid < (best_ask - 1))
+            {
+                price = best_bid + 1 + slippage;
+            }
+            else
+            {
+                price = best_bid + slippage;
+            }
+            return std::min(price, limit_price_);
+        }
+        else
+        {
+            if (delta_obv < -threshold_ && best_ask > (best_bid + 1))
+            {
+                price = best_ask - 1 + slippage;
+            }
+            else
+            {
+                price = best_ask + slippage;
+            }
+            return std::max(price, limit_price_);
+        }
+    }
+
+
+    std::vector<double> calculateOBVDelta() 
+    {   
+
+        size_t n = close_prices_.size(); 
+        if (n < lookback_length_ || volumes_.size() < lookback_length_) { 
+            return {}; 
+        }
+
+        std::vector<double> output(n, 0.0); // Initialise close prices with 0
+        size_t front_bad = lookback_length_; // First index to calculate OBV Delta
 
         // Ensure we have valid starting volume data
         for (size_t first_volume = 0; first_volume < n; first_volume++) { // Loop through all volume ticks to find first non-zero volume. 
-            if (volumes[first_volume] > 0) { // If volume greater than zero (found first valid volume tick), set front_bad to this index and break loop
+            if (volumes_[first_volume] > 0) { // If volume greater than zero (found first valid volume tick), set front_bad to this index and break loop
                 break;
             }
             front_bad = std::min(front_bad, n - 1); // If volume is zero, set front_bad to n - 1 (last index); OBV computation will be skipped 
@@ -184,21 +261,23 @@ private:
         }
 
         for (size_t icase = front_bad; icase < n; icase++) { // Starts iterating from front_bad (where volume data is valid) up to n (close prices size)
+
             double signed_volume = 0.0; // Signed volume = volume weighted by price movements (positive if price increase, negative if price decrease)
             double total_volume = 0.0; // Total volume = sum of all volumes in lookback period (regardless of price direction)
 
-            for (size_t i = 1; i < lookback_length && (icase - i) > 0; i++) {  // Loop backwards for lookback_length periods. 
+            for (size_t i = 1; i < lookback_length_ && (icase - i) > 0; i++) {  // Loop backwards for lookback_length periods. 
                 if (icase - i - 1 < 0) { // Prevents accessing out-of-bounds index
                     std::cerr << "ERROR: Out-of-bounds access prevented (icase - i - 1)" << std::endl;
                     break;
                 }
 
-                if (close_prices[icase - i] > close_prices[icase - i - 1]) { // If closing price is greater than previous closing price, add volume to signed volume
-                    signed_volume += volumes[icase - i];
-                } else if (close_prices[icase - i] < close_prices[icase - i - 1]) { // If price decreased then subtract the volume
-                    signed_volume -= volumes[icase - i];
+                if (close_prices_[icase - i] > close_prices_[icase - i - 1]) { // If closing price is greater than previous closing price, add volume to signed volume
+                    signed_volume += volumes_[icase - i];
+                } 
+                else if (close_prices_[icase - i] < close_prices_[icase - i - 1]) { // If price decreased then subtract the volume
+                    signed_volume -= volumes_[icase - i];
                 }
-                total_volume += volumes[icase - i]; // Add volume to total volume
+                total_volume += volumes_[icase - i]; // Add volume to total volume
             }
 
             if (total_volume <= 0.0) { // Normalise OBV Value; If total volume is zero or negative (no trades in lookback window), set output to 0.0
@@ -207,69 +286,49 @@ private:
             }
 
             double value = signed_volume / total_volume; // Calculate OBV ratio
-            double normalized_value = 100.0 * std::erfc(-0.6 * value * sqrt(static_cast<double>(lookback_length))) - 50.0; // Normalise OBV value to 0-100 scale. Error function erfc to smoothen OBV. High positive OBV delta = strong buying pressure; negative = selling pressure
+            double normalized_value = 100.0 * std::erfc(-0.6 * value * sqrt(static_cast<double>(lookback_length_))) - 50.0; // Normalise OBV value to 0-100 scale. Error function erfc to smoothen OBV. High positive OBV delta = strong buying pressure; negative = selling pressure
             output[icase] = normalized_value;
         }
 
-        if (n < front_bad + delta_length) { // If no. of closing prices less than front_bad + delta_length then log error and return
+        if (n < front_bad + delta_length_) { // If no. of closing prices less than front_bad + delta_length then log error and return
             std::cerr << "ERROR: Not enough data for delta calculation!" << std::endl; // Ensures atleast delta_length values are available for delta calculation
             return output;
         }
 
-        for (int icase = static_cast<int>(n) - 1; icase >= static_cast<int>(front_bad + delta_length); icase--) { // Loop backwards from last index to front_bad + delta_length to compute OBV delta over delta_length
-            if (icase - delta_length < 0) { // Prevents accessing out-of-bounds index 
+        for (int icase = static_cast<int>(n) - 1; icase >= static_cast<int>(front_bad + delta_length_); icase--) { // Loop backwards from last index to front_bad + delta_length to compute OBV delta over delta_length
+            if (icase - delta_length_ < 0) { // Prevents accessing out-of-bounds index 
                 std::cerr << "ERROR: Out-of-bounds access prevented (icase - delta_length)\n";
                 break;
             }
-            output[icase] -= output[icase - delta_length]; // Subtract OBV value from delta length preiods ago to compute OBV change
+            output[icase] -= output[icase - delta_length_]; // Subtract OBV value from delta length preiods ago to compute OBV change
         }
 
         return output;
     }
 
-    void placeOrder(Order::Side side)
+    void sleep()
     {
-        if (cancelling_ && last_accepted_order_id_.has_value())
-        {
-            cancelOrder(exchange_, side, ticker_, last_accepted_order_id_.value());
-            last_accepted_order_id_ = std::nullopt;
-        }
-        int quantity = 100; 
-        //int quantity = getRandomOrderSize(); 
-        double price = getQuotePrice(side);
-        placeLimitOrder(exchange_, side, ticker_, quantity, price, limit_price_);
-
-        std::cout << ">> " << (side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << "\n";
+        std::uniform_real_distribution<> dist(-REL_JITTER, REL_JITTER);
+        unsigned long jitter = dist(random_generator_);
+        unsigned long sleep_time_ms = std::round(trade_interval_ms_ * (1.0 + jitter));
+        std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
     }
 
-    double getQuotePrice(Order::Side side)
+    unsigned long long timeNow()
     {
-        if (close_prices_.empty()) return limit_price_;  
-        
-        double price = close_prices_.back();
-        
-        // Apply small variation based on OBV strength
-        double price_adjustment = std::min(5.0, std::abs(threshold_ / 1000.0)); // Example tweak
-        if (side == Order::Side::BID)
-        {
-            price = std::min(price + price_adjustment, limit_price_);
-        }
-        else
-        {
-            price = std::max(price - price_adjustment, limit_price_);
-        }
-        return price;
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
     }
 
     std::string exchange_;
     std::string ticker_;
     Order::Side trader_side_;
     double limit_price_;
-    bool cancelling_;
-    unsigned int trade_interval_ms_;
     int lookback_length_;
     int delta_length_;
-    double threshold_; 
+    double threshold_;
+    bool cancelling_;
+    unsigned int trade_interval_ms_;
     std::vector<double> close_prices_;
     std::vector<double> volumes_;
     std::optional<int> last_accepted_order_id_ = std::nullopt;
@@ -277,16 +336,10 @@ private:
     std::mutex mutex_;
     std::thread* trading_thread_ = nullptr;
     bool is_trading_ = false;
+    std::optional<MarketDataPtr> last_market_data_;
     constexpr static double REL_JITTER = 0.25;
-
-    // Profitability parameters 
-    struct Trade { 
-        double price;
-        int quantity;
-        Order::Side side;
-    }; 
-    std::vector<Trade> executed_trades_; 
-    double total_profit_ = 0.0;
+    constexpr static unsigned long MS_TO_NS = 1000000;
+    unsigned long next_trade_timestamp_;
 };
 
 #endif
