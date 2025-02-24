@@ -201,12 +201,6 @@ private:
         }
 
         int quantity = 100; 
-
-        if (!last_market_data_.has_value()) {
-            std::cout << "No market data available, skipping order placement.\n";
-            return;
-        }
-
         double best_bid = last_market_data_.value()->best_bid; //Get best bid price from market data
         double best_ask = last_market_data_.value()->best_ask; //Get best ask price from market data
 
