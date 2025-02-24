@@ -319,12 +319,12 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
 {   
     // Elapsed time since trading session start in seconds. 
     auto now = std::chrono::high_resolution_clock::now();
-    double elapsed_time = std::chrono::duration<double, std::micro>(now - trading_session_start_time_).count();
+    double elapsed_time = std::chrono::duration<double, std::milli>(now - trading_session_start_time_).count();
 
     // Time difference between the current trade and the last trade
     double time_diff = 0.0;
     if (last_trade_time_.find(resting_order->ticker) != last_trade_time_.end()) {
-        time_diff = std::chrono::duration<double, std::micro>(now - last_trade_time_[resting_order->ticker]).count();
+        time_diff = std::chrono::duration<double, std::milli>(now - last_trade_time_[resting_order->ticker]).count();
     } else {
         time_diff = trade->price;
     }

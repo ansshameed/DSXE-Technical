@@ -303,7 +303,7 @@ private:
         ? std::uniform_int_distribution<>(sMin, sMax)(random_generator_) 
         : std::uniform_int_distribution<>(dMin, dMax)(random_generator_);
 
-        int final_price = std::clamp(base_price + offset_value, 50, 250); // Clamp final price between 1 and 9999
+        int final_price = std::clamp(base_price + offset_value, 140, 220); // Clamp final price between 1 and 9999
 
         LimitOrderMessagePtr order_msg = std::make_shared<LimitOrderMessage>(); // Create limit order message
         order_msg->ticker = ticker_;
