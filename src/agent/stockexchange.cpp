@@ -10,6 +10,7 @@
 
 #include <iostream> // to print full profitability
 #include <iomanip>
+#include <chrono>
 
 void StockExchange::start()
 { 
@@ -95,7 +96,7 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
     LimitOrderPtr order = order_factory_.createLimitOrder(msg);
 
     if (order->agent_name == "OrderInjector")
-    {
+    {   
         std::cout << "[StockExchange] Injected order stored but will not be matched: "
                   << (order->side == Order::Side::BID ? "BID" : "ASK")
                   << " @ " << order->price << " for " << order->ticker << "\n";
@@ -120,7 +121,6 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
         ExecutionReportMessagePtr report = ExecutionReportMessage::createFromOrder(order);
         report->sender_id = this->agent_id;
         sendExecutionReport(std::to_string(order->sender_id), report);
-        publishMarketData(msg->ticker, order->side);
     }    
 };
 
@@ -316,7 +316,21 @@ void StockExchange::cancelOrder(OrderPtr order)
 }
 
 void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressing_order, TradePtr trade)
-{
+{   
+    // Elapsed time since trading session start in seconds. 
+    auto now = std::chrono::high_resolution_clock::now();
+    double elapsed_time = std::chrono::duration<double, std::micro>(now - trading_session_start_time_).count();
+
+    // Time difference between the current trade and the last trade
+    double time_diff = 0.0;
+    if (last_trade_time_.find(resting_order->ticker) != last_trade_time_.end()) {
+        time_diff = std::chrono::duration<double, std::micro>(now - last_trade_time_[resting_order->ticker]).count();
+    } else {
+        time_diff = trade->price;
+    }
+    // Update last trade timestamp
+    last_trade_time_[resting_order->ticker] = now; 
+
     // Decrement the quantity of the orders by quantity traded
     getOrderBookFor(resting_order->ticker)->updateOrderWithTrade(resting_order, trade);
     getOrderBookFor(resting_order->ticker)->updateOrderWithTrade(aggressing_order, trade);
@@ -338,7 +352,7 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
     sendExecutionReport(std::to_string(aggressing_order->sender_id), aggressing_report);
 
     // Broadcast the market data to all subscribers
-    publishMarketData(resting_order->ticker, aggressing_order->side);
+    publishMarketData(resting_order->ticker, aggressing_order->side, elapsed_time, time_diff);
 }
 
 void StockExchange::sendExecutionReport(std::string_view trader, ExecutionReportMessagePtr msg)
@@ -544,7 +558,7 @@ double StockExchange::calculateSmithsAlpha(std::string_view ticker)
     return smiths_alpha;
 }
 
-void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side)
+void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggressing_side, double elapsed_time, double time_diff) 
 {
     MarketDataPtr data = getOrderBookFor(ticker)->getLiveMarketData(aggressing_side);
     if (!data) { // DEBUG  
@@ -559,8 +573,8 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
     addLOBSnapshot(std::make_shared<LOBSnapshot>(
     data->ticker,
     data->side, // AGGRESSING ORDER
-    data->timestamp,
-    data->time_diff, 
+    elapsed_time,
+    time_diff,  
     data->best_bid,
     data->best_ask,
     data->micro_price,
@@ -599,7 +613,7 @@ void StockExchange::setTradingWindow(int connect_time, int trading_time)
             broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(order_inject_start_msg));
         }
         
-        std::this_thread::sleep_for(std::chrono::seconds(3));  // Allow OrderInjector to inject orders for 3 seconds
+        std::this_thread::sleep_for(std::chrono::seconds(5));  // Allow OrderInjector to inject orders for 3 seconds
 
         // **Phase 2: Start Trading Session**
         std::cout << "Order injection complete. Starting trading session now.\n";
@@ -614,7 +628,9 @@ void StockExchange::setTradingWindow(int connect_time, int trading_time)
 
 
 void StockExchange::startTradingSession()
-{
+{   
+    trading_session_start_time_ = std::chrono::high_resolution_clock::now();
+
     // Signal start of trading window to the matching engine
     std::unique_lock<std::mutex> trading_window_lock(trading_window_mutex_);
     trading_window_open_ = true;

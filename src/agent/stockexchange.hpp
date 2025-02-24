@@ -155,7 +155,7 @@ private:
     void sendExecutionReport(std::string_view trader, ExecutionReportMessagePtr msg);
 
     /** Publishes market data to all subscribers. */
-    void publishMarketData(std::string_view ticker, Order::Side aggressing_side);
+    void publishMarketData(std::string_view ticker, Order::Side aggressing_side, double elapsed_seconds, double time_diff);
 
     /** Broadcasts the given message to all subscribers of the given ticker. */
     void broadcastToSubscribers(std::string_view ticker, MessagePtr msg);
@@ -244,6 +244,9 @@ private:
     /** Count trader configs */
     int expected_trader_count_;
     std::unordered_set<int> received_profit_traders_;
+
+    std::chrono::high_resolution_clock::time_point trading_session_start_time_;
+    std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> last_trade_time_;
 
 };
 

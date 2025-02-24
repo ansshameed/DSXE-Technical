@@ -122,7 +122,7 @@ private:
                 lock.unlock();
                 if (timeNow() >= next_trade_timestamp_)
                 {
-                    if (price_volume_data_.size() >= lookback_vwap_ && close_prices_.size() >= lookback_obv_)
+                    if (!price_volume_data_.empty() && !close_prices_.empty())
                     {
                         double rolling_vwap = calculateVWAP(price_volume_data_);
                         std::vector<double> delta_obv_values = calculateOBVDelta();

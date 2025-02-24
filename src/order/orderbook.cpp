@@ -280,10 +280,10 @@ double OrderBook::calculateSpread()
     }
 
     // Ensure spread is calculated correctly
-    double spread = best_ask.value()->price - best_bid.value()->price;
+    double spread = std::abs(best_ask.value()->price - best_bid.value()->price);
 
     // Return spread
-    return spread >= 0 ? spread : -1; // Ensure spread is never negative
+    return spread; 
 }
 
 

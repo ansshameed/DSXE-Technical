@@ -134,14 +134,14 @@ private:
                         std::cout << "Not enough data for RSI calculation. Using default RSI: 50.0\n";
                     }
 
-                    if (bb_prices_.size() >= lookback_bb_)
+                    if (!bb_prices_.empty())
                     {
                         double sma = calculateSMA(bb_prices_);
                         double std_dev = calculateStandardDeviation(bb_prices_, sma);
                         double upper_band = sma + (std_dev_multiplier_ * std_dev);
                         double lower_band = sma - (std_dev_multiplier_ * std_dev);
 
-                        if (rsi_prices_.size() >= lookback_rsi_)
+                        if (!rsi_prices_.empty())
                         {
                             placeOrder(rsi, upper_band, lower_band);
                         }

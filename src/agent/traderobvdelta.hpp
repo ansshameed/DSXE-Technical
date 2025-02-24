@@ -118,7 +118,7 @@ private:
                 lock.unlock();
                 if (timeNow() >= next_trade_timestamp_)
                 {
-                    if (close_prices_.size() >= lookback_length_ && volumes_.size() >= lookback_length_)
+                    if (!close_prices_.empty() && !volumes_.empty())
                     {
                         std::vector<double> delta_obv_values = calculateOBVDelta();  
 
