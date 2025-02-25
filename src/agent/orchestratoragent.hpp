@@ -83,8 +83,6 @@ public:
                                 << std::dynamic_pointer_cast<OrderInjectorConfig>(injector_config)->exchange_name
                                 << std::endl;
                     configureNode(injector_config);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-                    launchOrderInjectorProcess(injector_config->addr, to_string(injector_config->type));
                 }
 
                 // Allow watcher to initialise first

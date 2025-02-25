@@ -88,11 +88,15 @@ public:
             is_injecting_ = false;
         }
         if (injection_thread_ != nullptr) {
-            injection_thread_->join();
+            if (injection_thread_->joinable()) {
+                injection_thread_->join();
+            }
             delete injection_thread_;
             injection_thread_ = nullptr;
         }
+        std::cout << "[OrderInjector] Successfully terminated.\n";
     }
+    
 
     void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
     {
@@ -119,6 +123,7 @@ public:
             else if (eventMsg->event_type == EventMessage::EventType::TRADING_SESSION_END) {
                 std::cout << "[OrderInjector] Trading session ended. Stopping order injection.\n";
                 onTradingEnd();
+                terminate(); 
             }
         } 
         else if (message->type == MessageType::MARKET_DATA) {
@@ -287,10 +292,16 @@ private:
             int numOrders = ordersCountDist(random_generator_);
 
             for (int i = 0; i < numOrders; ++i) {
+                {
+                    std::unique_lock<std::mutex> lock(mutex_);
+                    if (!is_injecting_) {
+                        std::cout << "[OrderInjector] Terminating mid-injection.\n";
+                        return;
+                    }
+                }
                 injectSingleOrder(sMin, sMax, dMin, dMax, offset_value);
                 std::this_thread::sleep_for(std::chrono::seconds(1));
             }
-
             std::this_thread::sleep_for(std::chrono::seconds(5));
         }
         std::cout << "[OrderInjector] Finished active injection.\n";

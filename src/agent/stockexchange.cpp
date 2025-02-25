@@ -413,13 +413,9 @@ void StockExchange::onSubscribe(SubscribeMessagePtr msg)
     std::cout << "Agent " << msg->sender_id << " is " << msg->agent_name << "\n"; // DEBUG ONLY
 
     if (order_books_.contains(std::string{msg->ticker}))
-    {
-        std::cout << "Subscription received: Agent " << msg->sender_id << " (" << msg->agent_name << ") subscribed to " << msg->ticker << " at address " << msg->address << "\n";
+    {   
+        std::cout << "Subscription address: " << msg->address << " Agent ID: " << msg->sender_id << "\n";
         addSubscriber(msg->ticker, msg->sender_id, msg->address);
-        if (msg->agent_name != "OrderInjector" && msg->agent_name != "MarketDataWatcher") {
-            expected_trader_count_++;
-            std::cout << "Trader Count ++ : " << expected_trader_count_ << "\n"; // DEBUG ONLY
-        }
     }
     else
     {
@@ -669,18 +665,7 @@ void StockExchange::endTradingSession()
     {
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
-
-
-    auto start_time = std::chrono::steady_clock::now();
-    while (received_profit_traders_.size() < expected_trader_count_) 
-    {  
-        if (std::chrono::steady_clock::now() - start_time > std::chrono::seconds(5)) {
-            std::cout << "Timeout reached, only received profits from " 
-                      << received_profit_traders_.size() << " / " << expected_trader_count_ << " traders.\n";
-            break;  // Don't block indefinitely
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Wait for profits
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Wait for profits
 
     writeProfitsToCSV();
 };

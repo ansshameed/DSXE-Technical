@@ -1,7 +1,7 @@
 <!-- Example simulation configuration file -->
 <simulation>
     <parameters>
-        <repetitions>1</repetitions>
+        <repetitions>20</repetitions>
         <time>30</time>
     </parameters>
     <instances>
