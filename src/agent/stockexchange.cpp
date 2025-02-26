@@ -602,6 +602,26 @@ void StockExchange::setTradingWindow(int connect_time, int trading_time)
         std::cout << "Waiting for connections for " << connect_time << " seconds..." << std::endl;
         std::this_thread::sleep_for(std::chrono::seconds(connect_time));
 
+        // After the initial period, continue checking for additional connections. 
+        std::cout << "Initial connection period complete. Monitoring for additional connections..." << std::endl;
+        auto last_connection_time = std::chrono::steady_clock::now();
+        size_t prev_count = agent_names_.size();
+        while (true) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));  // Check periodically
+            size_t current_count = agent_names_.size();
+            if (current_count > prev_count) {
+                std::cout << "New connection detected. Total connected agents: " << current_count << std::endl;
+                last_connection_time = std::chrono::steady_clock::now();
+                prev_count = current_count;
+            }
+            // If no new connection for 5 seconds, then proceed.
+            if (std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - last_connection_time).count() >= 5) {
+                std::cout << "No new connections for 5 seconds. Proceeding to order injection phase." << std::endl;
+                break;
+            }
+        }
+
         // **Phase 1: Order Injection**
         std::cout << "Starting order injection phase before trading begins...\n";
         EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);

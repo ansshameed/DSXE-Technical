@@ -92,6 +92,15 @@ public:
                 std::cout << "Simulation " << i << " configured." << std::endl;
                 std::cout << "Waiting " << simulation->time() << " seconds for simulation trial to end..." << std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(simulation->time()));
+
+                // Cleanup Phase 
+                std::cout << "Cleaning up trader processes..." << std::endl;
+                int ret = system("pkill -f 'simulation node --port 81'"); // TEMPORARY FIX UNTIL AWS LAUNCH
+                if(ret != 0) {
+                    std::cerr << "Warning: Failed to terminate some trader processes." << std::endl;
+                }
+                // Allow a short delay to let sockets and ports be released.
+                std::this_thread::sleep_for(std::chrono::seconds(3));
             }
             std::cout << "Finished all " << simulation->repetitions() << " simulation trials." << std::endl;
         });

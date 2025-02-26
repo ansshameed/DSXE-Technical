@@ -228,7 +228,7 @@ double OrderBook::calculateMidPrice()
 
     if (!best_bid.has_value() || !best_ask.has_value()) // If there are no bids or asks in the order book
     {
-        return -1;
+        return 0; 
     }
 
     return (best_bid.value()->price + best_ask.value()->price) / 2; // Calculate mid price as average of best bid and best ask prices
@@ -242,7 +242,7 @@ double OrderBook::calculateMicroPrice()
 
     if (!best_bid.has_value() || !best_ask.has_value() || bestBidSize() == 0 || bestAskSize() == 0) // If there are no bids or asks in the order book or the size of the best bid or best ask is zero
     {
-        return -1; 
+        return 0; 
     }
     
     double best_bid_price = best_bid.value()->price;
@@ -293,8 +293,8 @@ MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
 {
     MarketDataPtr data = std::make_shared<MarketData>();
     data->ticker = ticker_;
-    data->best_bid = bestBid().has_value() ? bestBid().value()->price : -1;
-    data->best_ask = bestAsk().has_value() ? bestAsk().value()->price : -1;
+    data->best_bid = bestBid().has_value() ? bestBid().value()->price : 0;
+    data->best_ask = bestAsk().has_value() ? bestAsk().value()->price : 0;
     data->best_bid_size = bestBidSize();
     data->best_ask_size = bestAskSize();
 
@@ -303,7 +303,7 @@ MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
     data->asks_count = asks_.size();
     data->bids_count = bids_.size();
 
-    data->last_price_traded = last_trade_.has_value() ? last_trade_.value()->price : -1;
+    data->last_price_traded = last_trade_.has_value() ? last_trade_.value()->price : 0;
     data->last_quantity_traded = last_trade_.has_value() ? last_trade_.value()->quantity : 0;
 
     data->high_price = trade_high_.has_value() ? trade_high_.value() : -1;
