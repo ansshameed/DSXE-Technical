@@ -34,10 +34,25 @@ public:
           config_(config)
         {
 
-            connect(config->exchange_addr, config->exchange_name, [=, this]() {});
+            // Automatically connect to exchange on initialisation
+        connect(config->exchange_addr, config->exchange_name, [=, this](){
+            subscribeToMarket(config->exchange_name, config->ticker);
+        });
     }   
 
     ~OrderInjectorAgent() { terminate(); }
+
+    /** Subscribe to market data from the given market. */
+    void subscribeToMarket(std::string_view exchange, std::string_view ticker)
+    {
+        SubscribeMessagePtr msg = std::make_shared<SubscribeMessage>();
+        msg->ticker = std::string{ticker};
+        msg->address = myAddr() + std::string{":"} + std::to_string(myPort());
+
+        std::cout << "Subscribing to market data for " << ticker << " from " << exchange << std::endl; 
+
+        Agent::sendMessageTo(exchange, std::dynamic_pointer_cast<Message>(msg));
+    }
 
     // Gracefully terminates the agent.
     void terminate() override {
@@ -231,7 +246,7 @@ private:
         return static_cast<int>(std::round(offset));
     }
 
-    // Compute the next daly interval based on time mode and number of traders 
+    // Compute the next delay interval based on time mode and number of traders 
     double getNextIssueDelay(int n_traders) {
         double interval = config_->interval; // interval from config (in seconds)
         if (config_->time_mode == "periodic") 
@@ -302,7 +317,8 @@ private:
             {
                 // Use real-world schedule offset (the total time is normalised to 1.0 here; adjust if needed)
                 offset_value = realWorldScheduleOffset(elapsed, 1.0, offset_events);
-            } else if (config_->use_offset) {
+            } 
+            else if (config_->use_offset) {
                 offset_value = scheduleOffset(elapsed);
             }
 

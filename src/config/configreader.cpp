@@ -321,8 +321,6 @@ AgentConfigPtr ConfigReader::configureOrderInjector(int id, pugi::xml_node& xml_
     
     config->ticker = std::string{xml_node.attribute("ticker").value()};
 
-    std::cout << "Configuring Order Injector: Exchange=" << config->exchange_name << ", Addr=" << config->exchange_addr << ", Ticker=" << config->ticker << std::endl;
-
     // Supply & Demand Values 
     config->supply_min_low = xml_node.attribute("supply_min_low").as_int(0);
     config->supply_min_high = xml_node.attribute("supply_min_high").as_int(100);
@@ -383,6 +381,24 @@ AgentConfigPtr ConfigReader::configureOrderInjector(int id, pugi::xml_node& xml_
 
     // Interval 
     config->interval = xml_node.attribute("interval").as_int(1); // Default interval value
+
+    std::cout << "Configuring Order Injector: " 
+          << "Exchange=" << config->exchange_name 
+          << ", Addr=" << config->exchange_addr 
+          << ", Ticker=" << config->ticker 
+          << ", SupplyMinLow=" << config->supply_min_low 
+          << ", SupplyMinHigh=" << config->supply_min_high 
+          << ", SupplyMaxLow=" << config->supply_max_low 
+          << ", SupplyMaxHigh=" << config->supply_max_high 
+          << ", DemandMinLow=" << config->demand_min_low 
+          << ", DemandMinHigh=" << config->demand_min_high 
+          << ", DemandMaxLow=" << config->demand_max_low 
+          << ", DemandMaxHigh=" << config->demand_max_high 
+          << ", StepMode=" << config->step_mode 
+          << ", TimeMode=" << config->time_mode 
+          << ", UseInputFile=" << (config->use_input_file ? "true" : "false") 
+          << ", UseOffset=" << (config->use_offset ? "true" : "false") 
+          << ", Interval=" << config->interval;
 
     return std::static_pointer_cast<AgentConfig>(config);
 }

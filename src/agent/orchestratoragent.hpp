@@ -60,22 +60,6 @@ public:
                     configureNode(trader_config);
                 }
 
-                // Allow traders to initialise first
-                std::this_thread::sleep_for(std::chrono::seconds(5));
-
-                // Initialise watchers
-                for (auto watcher_config : simulation->watchers())
-                {
-                    std::cout << "Initialising watcher: "
-                                << watcher_config->addr 
-                                << " for exchange " 
-                                << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->exchange_name
-                                << " with ticker "
-                                << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->ticker 
-                                << std::endl;
-                    configureNode(watcher_config);
-                }
-
                 for (auto injector_config : simulation->injectors())
                 {
                     std::cout << "Initialising injector: "
@@ -97,6 +81,19 @@ public:
                 // Allow injection before starting trading
                 std::this_thread::sleep_for(std::chrono::seconds(10));
 
+                // Initialise watchers
+                for (auto watcher_config : simulation->watchers())
+                {
+                    std::cout << "Initialising watcher: "
+                                << watcher_config->addr 
+                                << " for exchange " 
+                                << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->exchange_name
+                                << " with ticker "
+                                << std::dynamic_pointer_cast<MarketWatcherConfig>(watcher_config)->ticker 
+                                << std::endl;
+                    configureNode(watcher_config);
+                }
+
                 // Allow watcher to initialise first
                 std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -113,6 +110,9 @@ public:
                 }
                 // Allow a short delay to let sockets and ports be released.
                 std::this_thread::sleep_for(std::chrono::seconds(3));
+
+                trader_addresses_.clear();
+                std::cout << "Cleared trader addresses for next trial." << std::endl;
             }
             std::cout << "Finished all " << simulation->repetitions() << " simulation trials." << std::endl;
         });
