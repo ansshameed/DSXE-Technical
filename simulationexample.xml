@@ -1,7 +1,7 @@
 <!-- Example simulation configuration file -->
 <simulation>
     <parameters>
-        <repetitions>3</repetitions>
+        <repetitions>2</repetitions>
         <time>30</time>
     </parameters>
     <instances>
@@ -17,7 +17,24 @@
             <watcher exchange="NYSE" ticker="AAPL"/>
         </watchers>
         <orderinjectors>
-            <orderinjector exchange="NYSE" ticker="AAPL"/>
+            <orderinjector 
+                exchange="NYSE" 
+                ticker="AAPL"
+                supply_min_low="0" 
+                supply_min_high="100" 
+                supply_max_low="100" 
+                supply_max_high="200"
+                demand_min_low="0" 
+                demand_min_high="100" 
+                demand_max_low="100" 
+                demand_max_high="200"
+                step_mode="fixed" 
+                time_mode="periodic"
+                use_input_file="true"
+                use_offset="true"
+                interval="1"
+                input_file="../IBM-310817.csv"
+            />
         </orderinjectors>
     </agents>
 </simulation>

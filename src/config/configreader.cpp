@@ -321,20 +321,68 @@ AgentConfigPtr ConfigReader::configureOrderInjector(int id, pugi::xml_node& xml_
     
     config->ticker = std::string{xml_node.attribute("ticker").value()};
 
-    std::cout << "Configuring Order Injector: Exchange=" << config->exchange_name 
-          << ", Addr=" << config->exchange_addr 
-          << ", Ticker=" << config->ticker << std::endl;
+    std::cout << "Configuring Order Injector: Exchange=" << config->exchange_name << ", Addr=" << config->exchange_addr << ", Ticker=" << config->ticker << std::endl;
 
-    
     // Supply & Demand Values 
-    config->supply_min_low = 0; 
-    config->supply_min_high = 100;
-    config->supply_max_low = 100;
-    config->supply_max_high = 200;
-    config->demand_min_low = 0;
-    config->demand_min_high = 100;
-    config->demand_max_low = 100;
-    config->demand_max_high = 200;
+    config->supply_min_low = xml_node.attribute("supply_min_low").as_int(0);
+    config->supply_min_high = xml_node.attribute("supply_min_high").as_int(100);
+    config->supply_max_low = xml_node.attribute("supply_max_low").as_int(100);
+    config->supply_max_high = xml_node.attribute("supply_max_high").as_int(200);
+    config->demand_min_low = xml_node.attribute("demand_min_low").as_int(0);
+    config->demand_min_high = xml_node.attribute("demand_min_high").as_int(100);
+    config->demand_max_low = xml_node.attribute("demand_max_low").as_int(100);
+    config->demand_max_high = xml_node.attribute("demand_max_high").as_int(200);
+
+    // Step mode configuration
+    std::string step_mode = std::string{xml_node.attribute("step_mode").value()};
+    if (step_mode == "fixed" || step_mode == "jittered" || step_mode == "random" || step_mode == "drip-poisson") 
+    {
+        config->step_mode = step_mode;
+    } 
+    else 
+    {
+        std::cerr << "Invalid step_mode: " << step_mode << ". Defaulting to 'fixed'.\n";
+        config->step_mode = "fixed"; // Default mode from Python
+    }
+
+    // Time mode configuration (periodic, drip-fixed, drip-jitter, drip-poisson)
+    std::string time_mode = std::string{xml_node.attribute("time_mode").value()};
+    if (time_mode == "periodic" || time_mode == "drip-fixed" || time_mode == "drip-jitter" || time_mode == "drip-poisson") 
+    {
+        config->time_mode = time_mode;
+    } 
+    else 
+    {
+        std::cerr << "Invalid time_mode: " << time_mode << ". Defaulting to 'periodic'.\n";
+        config->time_mode = "periodic"; // Default from Python
+    }
+
+    // Input File vs. Offset Logic (Matches Python config)
+    bool use_input_file = xml_node.attribute("use_input_file").as_bool(false);
+    bool use_offset = xml_node.attribute("use_offset").as_bool(false);
+
+    if (use_input_file) 
+    {
+        config->use_input_file = true;
+        config->input_file = std::string{xml_node.attribute("input_file").value()};
+        config->use_offset = false;  // Ensure offset is disabled when input file is used
+        std::cout << "Using input file for order schedule: " << config->input_file << std::endl;
+    } 
+    else if (use_offset) 
+    {
+        config->use_input_file = false;
+        config->use_offset = true;
+        std::cout << "Using offset function for order schedule." << std::endl;
+    } 
+    else 
+    {
+        config->use_input_file = false;
+        config->use_offset = false;
+        std::cout << "Using default static order scheduling." << std::endl;
+    }
+
+    // Interval 
+    config->interval = xml_node.attribute("interval").as_int(1); // Default interval value
 
     return std::static_pointer_cast<AgentConfig>(config);
 }
@@ -406,7 +454,7 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
 
     // Assign a different limit price per trader - DEBUG TO TEST PROFITABILIITY BY TESTING RANDOM LIMIT PRICES
-    std::uniform_int_distribution<int> dist(140, 150); // Range of limit prices
+    std::uniform_int_distribution<int> dist(50, 70); // Range of limit prices
     static std::random_device rd; // Random seed
     static std::mt19937 gen(rd()); // Random number generator
     trader_config->limit = dist(gen);
@@ -452,7 +500,7 @@ AgentConfigPtr ConfigReader::configureTraderZIPFromCSV(
 
     // Set default values
 
-    std::uniform_int_distribution<int> dist(140, 150); // Range of limit prices
+    std::uniform_int_distribution<int> dist(50, 70); // Range of limit prices
     static std::random_device rd; // Random seed
     static std::mt19937 gen(rd()); // Random number generator
     zip_config->limit = dist(gen);

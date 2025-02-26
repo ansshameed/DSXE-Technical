@@ -231,20 +231,20 @@ private:
     /** Profit attributes. */
     std::unordered_map<int, double> agent_profits_; 
     std::unordered_map<int, std::string> agent_names_;
-    std::mutex profit_mutex_; 
     std::unordered_map<std::string, double> total_profits_;
     std::unordered_map<std::string, double> buyer_profits_;
     std::unordered_map<std::string, double> seller_profits_;
+    std::unordered_set<int> received_profit_traders_;
+    std::mutex profit_mutex_;
+    std::condition_variable profit_cv_;
+    size_t expected_trader_count_ = 0; 
+
 
     /** Simulation config params. */
     SimulationConfigPtr simulation_config_;
 
     std::unordered_map<std::string, double> agent_profits_by_name_;
-
-    /** Count trader configs */
-    int expected_trader_count_;
-    std::unordered_set<int> received_profit_traders_;
-
+  
     std::chrono::high_resolution_clock::time_point trading_session_start_time_;
     std::unordered_map<std::string, std::chrono::high_resolution_clock::time_point> last_trade_time_;
 

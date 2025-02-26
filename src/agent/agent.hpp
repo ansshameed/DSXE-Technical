@@ -64,6 +64,9 @@ public:
     /** On receiving a new broadcast, identifies the sender, adding to the address book if needed. */
     void handleBroadcast(ipv4_view sender, MessagePtr message);
 
+    /** Handles an incoming message and returns the message to send. */
+    virtual std::optional<MessagePtr> handleMessageFrom(std::string_view sender, MessagePtr message) = 0;
+
 protected:
 
     /** Returns the port the agent is listening on. */
@@ -73,9 +76,6 @@ protected:
     std::string myAddr();
 
     /** Derived classes must implement these: */
-
-    /** Handles an incoming message and returns the message to send. */
-    virtual std::optional<MessagePtr> handleMessageFrom(std::string_view sender, MessagePtr message) = 0;
 
     /** Handles an incoming broadcast. */
     virtual void handleBroadcastFrom(std::string_view agent_name, MessagePtr message) = 0;

@@ -6,6 +6,7 @@
 #include "traderagent.hpp"
 #include "../config/zipconfig.hpp"
 #include "../message/profitmessage.hpp"
+#include "../message/customer_order_message.hpp"
 
 /** Real-time implementation of the ZIP trading algorithm. */
 class TraderZIP : public TraderAgent
@@ -49,6 +50,22 @@ public:
         TraderAgent::terminate();
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                current_customer_order_ = cust_msg; 
+                std::cout << "[ZIP] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function
+        }
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
     void onTradingStart() override
     {
         std::cout << "Trading window started.\n";
@@ -63,8 +80,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -341,6 +360,15 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
+        if (current_customer_order_.has_value()) 
+        { 
+            // Override trader's default limit price with the customer order's price 
+            limit_price_ = current_customer_order_.value()->price;
+            trader_side_ = current_customer_order_.value()->side;
+            // Optionally, once processed we can clear the current customer order 
+            current_customer_order_.reset(); 
+        }
+
         // Place new order with a new price
         last_price_ = getQuotePrice();
         int quantity = 100; 
@@ -380,6 +408,7 @@ private:
     int last_client_order_id_;
     std::optional<int> last_accepted_order_id_;
     std::optional<MarketDataPtr> last_market_data_;
+    std::optional<CustomerOrderMessagePtr> current_customer_order_;
 
     unsigned long next_lower_margin_timestamp_;
     unsigned long next_undercut_timestamp_;

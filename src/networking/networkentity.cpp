@@ -20,6 +20,9 @@
 #include "../message/config_message.hpp"
 #include "../message/config_ack_message.hpp"
 #include "../message/profitmessage.hpp"
+#include "../message/customer_order_message.hpp"
+#include "../message/request_trader_list_message.hpp"
+#include "../message/trader_list_message.hpp"
 #include "../order/order.hpp"
 #include "../order/limitorder.hpp"
 #include "../order/marketorder.hpp"
@@ -34,6 +37,9 @@ BOOST_CLASS_EXPORT(CancelOrderMessage);
 BOOST_CLASS_EXPORT(EventMessage);
 BOOST_CLASS_EXPORT(CancelRejectMessage);
 BOOST_CLASS_EXPORT(ProfitMessage);
+BOOST_CLASS_EXPORT(CustomerOrderMessage);
+BOOST_CLASS_EXPORT(RequestTraderListMessage);
+BOOST_CLASS_EXPORT(TraderListMessage);
 
 /** TODO: This should be elsewhere */
 BOOST_CLASS_EXPORT(AgentConfig);

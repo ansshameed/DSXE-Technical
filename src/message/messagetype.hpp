@@ -14,7 +14,10 @@ enum class MessageType : int
     EXECUTION_REPORT,
     CANCEL_REJECT, 
     PROFIT, 
-    TRADER_CONFIG
+    TRADER_CONFIG, 
+    CUSTOMER_ORDER, 
+    TRADER_LIST_RESPONSE, 
+    REQUEST_TRADER_LIST
 };
 
 #endif

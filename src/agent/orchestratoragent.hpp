@@ -53,6 +53,7 @@ public:
                 // Initialise traders
                 for (auto trader_config : simulation->traders())
                 {   
+                    trader_addresses_.push_back(trader_config->addr);
                     std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     launchTraderProcess(trader_config->addr, to_string(trader_config->type));
                     std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for traders to launch
@@ -83,7 +84,18 @@ public:
                                 << std::dynamic_pointer_cast<OrderInjectorConfig>(injector_config)->exchange_name
                                 << std::endl;
                     configureNode(injector_config);
+                    std::this_thread::sleep_for(std::chrono::seconds(2));
+                    sendTraderListToInjector(injector_config); 
                 }
+
+                std::cout << "[Orchestrator] Sending ORDER_INJECTION_START event to Order Injector.\n";
+                EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
+                for (auto injector_config : simulation->injectors()) {
+                    sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(order_inject_start_msg));
+                }
+
+                // Allow injection before starting trading
+                std::this_thread::sleep_for(std::chrono::seconds(10));
 
                 // Allow watcher to initialise first
                 std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -113,6 +125,8 @@ public:
         std::cout << "Initialising agent: " << to_string(config->type) << " with addr: " << config->addr << "\n"; // DEBUG
         this->connect(std::string(config->addr), std::to_string(config->agent_id), [=, this](){
 
+            addToAddressBook(config->addr, std::to_string(config->agent_id));
+            std::cout << "[DEBUG] Registered agent: " << config->addr << " as ID " << config->agent_id << "\n";
             ConfigMessagePtr msg = std::make_shared<ConfigMessage>();
             msg->config = config;
 
@@ -182,7 +196,18 @@ private:
     /** Checks the type of the incoming message and makes a callback. */
     std::optional<MessagePtr> handleMessageFrom(std::string_view sender, MessagePtr message) override
     {
-        std::cout << "Orchestrator received a message" << "\n";
+        if (message->type == MessageType::REQUEST_TRADER_LIST) { 
+            if (trader_addresses_.empty()) {
+                std::cerr << "[Orchestrator] Warning: No traders available when responding to injector.\n";
+            }
+    
+            // Create and send trader list response
+            TraderListMessagePtr response_msg = std::make_shared<TraderListMessage>();
+            response_msg->trader_addresses = trader_addresses_; 
+            sendMessageTo(sender, std::static_pointer_cast<Message>(response_msg));
+    
+            std::cout << "[Orchestrator] Sent trader list to Order Injector.\n";
+        }
         return std::nullopt;
     }
 
@@ -192,7 +217,35 @@ private:
         std::cout << "Orchestrator received a broadcast" << "\n";
     }
 
+    void sendTraderListToInjector(AgentConfigPtr injector_config)
+    {
+        if (trader_addresses_.empty()) {
+            std::cerr << "[Orchestrator] Warning: No traders available, not sending trader list.\n";
+            return;
+        }
+
+        if (!injector_config) {
+            std::cerr << "[Orchestrator] Error: Injector config is null.\n";
+            return;
+        }
+
+        std::string agent_id_str = std::to_string(injector_config->agent_id);
+        if (agent_id_str.empty() || agent_id_str == "0") {
+            std::cerr << "[Orchestrator] Error: Invalid injector agent ID.\n";
+            return;
+        }
+
+        TraderListMessagePtr response_msg = std::make_shared<TraderListMessage>();
+        response_msg->trader_addresses = trader_addresses_;
+
+        std::cout << "[Orchestrator] Sending trader list to Order Injector (Agent ID: " << agent_id_str << ").\n";
+
+        sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(response_msg));
+    }
+
+
     std::thread* configuration_thread_;
+    std::vector<std::string> trader_addresses_; 
 };
 
 #endif

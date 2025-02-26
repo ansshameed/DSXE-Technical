@@ -3,6 +3,7 @@
 
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
+#include "../message/customer_order_message.hpp"
 
 class TraderShaver : public TraderAgent
 {
@@ -35,6 +36,7 @@ public:
     void onTradingEnd() override
     {   
         sendProfitToExchange();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
         is_trading_ = false;
         std::cout << "Trading window ended.\n";
     }
@@ -72,6 +74,23 @@ public:
         throw std::runtime_error("Shaver trader does not cancel orders therefore cannot receive cancel rejection.");
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                current_customer_order_ = cust_msg; 
+                std::cout << "[SHVR] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function
+        }
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
+
 private:
 
     void sendProfitToExchange()
@@ -84,16 +103,21 @@ private:
 
     double getShaverPrice(MarketDataMessagePtr msg)
     {
-        if (trader_side_ == Order::Side::BID)
+        double price;
+        if (current_customer_order_.has_value()) 
         {
-            double shaved_price = msg->data->best_bid + 1;
-            return std::min(shaved_price, limit_price_);
+            price = current_customer_order_.value()->price;
+            current_customer_order_.reset(); // Clear after processing
+        }
+        else if (trader_side_ == Order::Side::BID)
+        {
+            price = std::min(msg->data->best_bid + 1, limit_price_);
         }
         else
         {
-            double shaved_price = msg->data->best_ask - 1;
-            return std::max(shaved_price, limit_price_);
+            price = std::max(msg->data->best_ask - 1, limit_price_);
         }
+        return price;
     }
 
     std::string exchange_;
@@ -105,6 +129,8 @@ private:
 
     constexpr static double MIN_PRICE = 1.0;
     constexpr static double MAX_PRICE = 200.0;
+
+    std::optional<CustomerOrderMessagePtr> current_customer_order_;
 };
 
 #endif

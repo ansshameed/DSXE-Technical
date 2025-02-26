@@ -5,6 +5,7 @@
 
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
+#include "../message/customer_order_message.hpp"
 
 /** Prototype ZIC trader implementation. */
 class TraderZIC : public TraderAgent
@@ -56,8 +57,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -111,6 +114,22 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                current_customer_order_ = cust_msg; 
+                std::cout << "[ZIC] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function
+        }
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
 private:
 
     void sendProfitToExchange()
@@ -160,6 +179,13 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
+        if (current_customer_order_.has_value()) 
+        { 
+            limit_price_ = current_customer_order_.value()->price;
+            trader_side_ = current_customer_order_.value()->side;
+            current_customer_order_.reset(); // Clear after processing
+        }
+
         int quantity = 100;
         double price = getRandomPrice();
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
@@ -200,6 +226,8 @@ private:
     constexpr static double MIN_PRICE = 1.0;
     constexpr static double MAX_PRICE = 200.0;
     constexpr static double REL_JITTER = 0.25;
+
+    std::optional<CustomerOrderMessagePtr> current_customer_order_;
 };
 
 #endif

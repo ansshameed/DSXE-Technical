@@ -95,15 +95,6 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
 {
     LimitOrderPtr order = order_factory_.createLimitOrder(msg);
 
-    if (order->agent_name == "OrderInjector")
-    {   
-        std::cout << "[StockExchange] Injected order stored but will not be matched: "
-                  << (order->side == Order::Side::BID ? "BID" : "ASK")
-                  << " @ " << order->price << " for " << order->ticker << "\n";
-        getOrderBookFor(order->ticker)->addOrder(order);
-        return; 
-    }
-
     if (crossesSpread(order))
     {
         if (order->time_in_force == Order::TimeInForce::FOK)
@@ -132,7 +123,7 @@ void StockExchange::onMarketOrder(MarketOrderMessagePtr msg)
     {
         std::optional<LimitOrderPtr> best_ask = getOrderBookFor(msg->ticker)->bestAsk();
 
-        while (best_ask.has_value() && !order->isFilled() && best_ask.value()->agent_name != "OrderInjector")
+        while (best_ask.has_value() && !order->isFilled())
         {
             getOrderBookFor(msg->ticker)->popBestAsk();
 
@@ -147,7 +138,7 @@ void StockExchange::onMarketOrder(MarketOrderMessagePtr msg)
     {
         std::optional<LimitOrderPtr> best_bid = getOrderBookFor(msg->ticker)->bestBid();
 
-        while (best_bid.has_value() && !order->isFilled() && best_bid.value()->agent_name != "OrderInjector")
+        while (best_bid.has_value() && !order->isFilled())
         {
             getOrderBookFor(msg->ticker)->popBestBid();
 
@@ -211,7 +202,7 @@ void StockExchange::matchOrder(LimitOrderPtr order)
     if (order->side == Order::Side::BID) {
         std::optional<LimitOrderPtr> best_ask = getOrderBookFor(order->ticker)->bestAsk();
         
-        while (best_ask.has_value() && !order->isFilled() && order->price >= best_ask.value()->price && best_ask.value()->agent_name != "OrderInjector")
+        while (best_ask.has_value() && !order->isFilled() && order->price >= best_ask.value()->price)
         {
             getOrderBookFor(order->ticker)->popBestAsk();
 
@@ -226,7 +217,7 @@ void StockExchange::matchOrder(LimitOrderPtr order)
     {
         std::optional<LimitOrderPtr> best_bid = getOrderBookFor(order->ticker)->bestBid();
 
-        while (best_bid.has_value() && !order->isFilled() && order->price <= best_bid.value()->price && best_bid.value()->agent_name != "OrderInjector")
+        while (best_bid.has_value() && !order->isFilled() && order->price <= best_bid.value()->price)
         {
             getOrderBookFor(order->ticker)->popBestBid();
 
@@ -256,7 +247,7 @@ void StockExchange::matchOrderInFull(LimitOrderPtr order)
 
     if (order->side == Order::Side::BID) {
         std::optional<LimitOrderPtr> best_ask = getOrderBookFor(order->ticker)->bestAsk();
-        while (best_ask.has_value() && temp_rem_quantity > 0 && order->price >= best_ask.value()->price && best_ask.value()->agent_name != "OrderInjector")
+        while (best_ask.has_value() && temp_rem_quantity > 0 && order->price >= best_ask.value()->price)
         {
             getOrderBookFor(order->ticker)->popBestAsk();
             stack.push(best_ask.value());
@@ -267,7 +258,7 @@ void StockExchange::matchOrderInFull(LimitOrderPtr order)
     else
     {
         std::optional<LimitOrderPtr> best_bid = getOrderBookFor(order->ticker)->bestBid();
-        while (best_bid.has_value() && temp_rem_quantity > 0 && order->price <= best_bid.value()->price && best_bid.value()->agent_name != "OrderInjector")
+        while (best_bid.has_value() && temp_rem_quantity > 0 && order->price <= best_bid.value()->price)
         {
             getOrderBookFor(order->ticker)->popBestBid();
 
@@ -623,13 +614,13 @@ void StockExchange::setTradingWindow(int connect_time, int trading_time)
         }
 
         // **Phase 1: Order Injection**
-        std::cout << "Starting order injection phase before trading begins...\n";
-        EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
-        for (const auto& [ticker, ticker_subscribers] : subscribers_) {
-            broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(order_inject_start_msg));
-        }
+        //std::cout << "Starting order injection phase before trading begins...\n";
+        //EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
+        //for (const auto& [ticker, ticker_subscribers] : subscribers_) {
+            //broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(order_inject_start_msg));
+        //}
         
-        std::this_thread::sleep_for(std::chrono::seconds(5));  // Allow OrderInjector to inject orders for 3 seconds
+        //std::this_thread::sleep_for(std::chrono::seconds(5));  // Allow OrderInjector to inject orders for 3 seconds
 
         // **Phase 2: Start Trading Session**
         std::cout << "Order injection complete. Starting trading session now.\n";
@@ -668,25 +659,33 @@ void StockExchange::endTradingSession()
     // Signal end of trading window to the matching engine
     std::unique_lock<std::mutex> trading_window_lock(trading_window_mutex_);
     trading_window_open_ = false;
-    msg_queue_.close();
     trading_window_lock.unlock();
     trading_window_cv_.notify_all();
 
-    // Iterate through all tickers and close all open csv files
-    for (auto const& [ticker, writer] : trade_tapes_)
-    {
-        writer->stop();
-    }
-
     EventMessagePtr msg = std::make_shared<EventMessage>(EventMessage::EventType::TRADING_SESSION_END);
-
     // Send a message to subscribers of all tickers
     for (auto const& [ticker, ticker_subscribers] : subscribers_)
     {
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
-    std::this_thread::sleep_for(std::chrono::milliseconds(200)); // Wait for profits
 
+    // Wait until all expected profit messages have been received (or a timeout)
+    {
+        std::unique_lock<std::mutex> lock(profit_mutex_);
+        bool allReceived = profit_cv_.wait_for(lock, std::chrono::seconds(3), [this](){
+            return received_profit_traders_.size() >= expected_trader_count_;
+        });
+        if (!allReceived) {
+            std::cout << "Timed out waiting for some profit messages. Proceeding with available data.\n";
+        }
+    }
+
+    msg_queue_.close();
+    // Iterate through all tickers and close all open csv files
+    for (auto const& [ticker, writer] : trade_tapes_)
+    {
+        writer->stop();
+    }
     writeProfitsToCSV();
 };
 

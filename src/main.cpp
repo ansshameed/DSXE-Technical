@@ -129,6 +129,20 @@ void local_runner(int argc, char** argv)
         config->exchange_name = vm["exchange-name"].as<std::string>();
         config->exchange_addr = vm["exchange-addr"].as<std::string>();
         config->ticker = vm["ticker"].as<std::string>();
+        config->supply_min_low = vm["supply-min-low"].as<int>();
+        config->supply_min_high = vm["supply-min-high"].as<int>();
+        config->supply_max_low = vm["supply-max-low"].as<int>();
+        config->supply_max_high = vm["supply-max-high"].as<int>();
+        config->demand_min_low = vm["demand-min-low"].as<int>();
+        config->demand_min_high = vm["demand-min-high"].as<int>();
+        config->demand_max_low = vm["demand-max-low"].as<int>();
+        config->demand_max_high = vm["demand-max-high"].as<int>();
+        config->step_mode = vm["step-mode"].as<std::string>();
+        config->time_mode = vm["time-mode"].as<std::string>();
+        config->use_input_file = vm["use-input-file"].as<bool>();
+        config->use_offset = vm["use-offset"].as<bool>();
+        config->interval = vm["interval"].as<int>();
+        config->input_file = vm["input-file"].as<std::string>();
 
         std::shared_ptr<OrderInjectorAgent> orderinjector (new OrderInjectorAgent{&entity, config});
         entity.setAgent(std::static_pointer_cast<Agent>(orderinjector));

@@ -77,18 +77,18 @@ protected:
     /** Bookkeeping trades for profit calculations. */
     void bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & order);
 
+    /** Checks the type of the incoming message and makes a callback. */
+    std::optional<MessagePtr> handleMessageFrom(std::string_view sender, MessagePtr message) override;
+
+    /** Checks the type of the incoming broadcast and makes a callback. */
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override;
+
     /** Bookkeeping function for individual traders */
     unsigned int n_trades; 
     std::vector<TradePtr> blotter_; 
     double balance = 0.0; 
 
 private:
-
-    /** Checks the type of the incoming message and makes a callback. */
-    std::optional<MessagePtr> handleMessageFrom(std::string_view sender, MessagePtr message) override;
-
-    /** Checks the type of the incoming broadcast and makes a callback. */
-    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override;
 
     /** Signals that trading has started and starts sending callbacks to handlers. */
     void signalTradingStart();

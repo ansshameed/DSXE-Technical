@@ -24,6 +24,13 @@ public:
     int demand_min_high; 
     int demand_max_low; 
     int demand_max_high; 
+    std::string step_mode; 
+    std::string time_mode;
+    bool use_input_file; 
+    bool use_offset;
+    int interval; 
+    std::string input_file;
+
 
 private:
     friend class boost::serialization::access;
@@ -41,6 +48,12 @@ private:
         ar & demand_min_high;
         ar & demand_max_low;
         ar & demand_max_high;
+        ar & step_mode; 
+        ar & time_mode;
+        ar & use_input_file;
+        ar & use_offset;
+        ar & interval;
+        ar & input_file;
     }
 };
 
