@@ -63,8 +63,8 @@ public:
                     } 
                 }
 
-                // Allow exchanges to initialise first
-                std::this_thread::sleep_for(std::chrono::seconds(10));
+                // Allow injector to initialise first
+                std::this_thread::sleep_for(std::chrono::seconds(5));
 
                 // Initialise traders
                 for (auto trader_config : simulation->traders())
@@ -98,13 +98,8 @@ public:
                     sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(order_inject_start_msg));
                 }
 
-                // Allow injection before starting trading
-                std::this_thread::sleep_for(std::chrono::seconds(10));
-
-                // Initialise watcher
-
-                // Allow watcher to initialise first
-                std::this_thread::sleep_for(std::chrono::seconds(2));
+                // Allow injection to send customer orders before trading. 
+                std::this_thread::sleep_for(std::chrono::seconds(8));
 
                 // Wait for this trial to finish before starting the next one
                 std::cout << "Simulation " << i << " configured." << std::endl;
@@ -115,7 +110,7 @@ public:
                 std::cout << "Cleared trader addresses for next trial." << std::endl;
             }
             std::cout << "Finished all " << simulation->repetitions() << " simulation trials." << std::endl;
-            EventMessagePtr stop_injection_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_STOP);
+            EventMessagePtr stop_injection_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_STOP); // Stop injection entirely after all repetitions
             for (auto injector_config : simulation->injectors()) {
                 sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(stop_injection_msg));
             }

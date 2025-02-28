@@ -2,6 +2,7 @@
 #define TRADER_ZIC_HPP
 
 #include <random>
+#include <stack> 
 
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
@@ -182,7 +183,7 @@ private:
 
         if (!customer_orders_.empty()) 
         {   
-            auto cust_order = customer_orders_.back(); // Get next customer order
+            auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = std::clamp(cust_order->price, MIN_PRICE, MAX_PRICE);
             trader_side_ = cust_order->side;
@@ -230,7 +231,7 @@ private:
     constexpr static double REL_JITTER = 0.25;
 
     std::optional<CustomerOrderMessagePtr> current_customer_order_;
-    std::queue<CustomerOrderMessagePtr> customer_orders_;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif

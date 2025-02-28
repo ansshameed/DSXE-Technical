@@ -305,7 +305,7 @@ double OrderBook::calculateMicroPrice()
 
 int OrderBook::getAggressingSide(Order::Side aggressing_side)
 {
-    return (aggressing_side == Order::Side::BID) ? 0 : 1; // Return 0 if BID, 1 if ASK
+    return (aggressing_side == Order::Side::BID) ? 1 : 0; // Return 0 if BID, 1 if ASK
 }
 
 double OrderBook::calculateImbalance() 

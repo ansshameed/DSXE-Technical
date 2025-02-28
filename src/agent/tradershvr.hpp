@@ -106,12 +106,14 @@ private:
     {
         double price;
 
-        if (current_customer_order_.has_value()) 
+        if (!customer_orders_.empty())
         {
+            std::lock_guard<std::mutex> lock(mutex_);
+            current_customer_order_ = customer_orders_.top();
+            customer_orders_.pop();
             limit_price_ = current_customer_order_.value()->price;
-            //current_customer_order_.reset(); // Clear after processing
         }
-    
+
         if (trader_side_ == Order::Side::BID)
         {
             price = std::min(msg->data->best_bid + 1, limit_price_);
@@ -137,7 +139,7 @@ private:
 
     std::optional<CustomerOrderMessagePtr> current_customer_order_;
     std::mutex mutex_;
-    std::queue<CustomerOrderMessagePtr> customer_orders_;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif

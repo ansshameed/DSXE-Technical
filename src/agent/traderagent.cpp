@@ -198,13 +198,7 @@ void TraderAgent::bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & or
         profit = (order->price - trade->price);
     } else {
         profit = (trade->price - order->price);
-    }
-
-    if (profit < 0) { 
-        std::cerr << "Negative profit detected: " << profit << "\n"; 
-        std::cerr << "Aborting trade to prevent loss.\n"; 
-        profit = 0; 
-    }
+    } 
 
     balance += profit; 
     n_trades++; 

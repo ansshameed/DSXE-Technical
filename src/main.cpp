@@ -144,7 +144,7 @@ void local_runner(int argc, char** argv)
         config->interval = vm["interval"].as<int>();
         config->input_file = vm["input-file"].as<std::string>();
 
-        std::shared_ptr<OrderInjectorAgent> orderinjector (new OrderInjectorAgent{&entity, config});
+        std::shared_ptr<OrderInjectorAgent> orderinjector (new OrderInjectorAgent{&entity, config, });
         entity.setAgent(std::static_pointer_cast<Agent>(orderinjector));
         entity.start();
     }
@@ -304,7 +304,7 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_period = 20; // Example value
+        int lookback_period = 10; // Example value
 
         std::shared_ptr<TraderVWAP> trader (new TraderVWAP{&entity, config, lookback_period});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));

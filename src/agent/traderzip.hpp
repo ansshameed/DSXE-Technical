@@ -2,6 +2,7 @@
 #define TRADER_ZIP_HPP
 
 #include <random>
+#include <stack> 
 
 #include "traderagent.hpp"
 #include "../config/zipconfig.hpp"
@@ -363,7 +364,7 @@ private:
         std::lock_guard<std::mutex> lock(mutex_);
         if (!customer_orders_.empty()) 
         {   
-            auto cust_order = customer_orders_.back(); // Get next customer order
+            auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
             trader_side_ = cust_order->side;
@@ -408,6 +409,7 @@ private:
     std::optional<int> last_accepted_order_id_;
     std::optional<MarketDataPtr> last_market_data_;
     std::optional<CustomerOrderMessagePtr> current_customer_order_;
+    std::stack<CustomerOrderMessagePtr> customer_orders_; // Latest customer order 
 
     unsigned long next_lower_margin_timestamp_;
     unsigned long next_undercut_timestamp_;
@@ -423,7 +425,6 @@ private:
     constexpr static double REL_JITTER = 0.25;
 
     constexpr static unsigned long MS_TO_NS = 1000000;
-    std::queue<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif
