@@ -1,7 +1,7 @@
 <!-- Example simulation configuration file -->
 <simulation>
     <parameters>
-        <repetitions>2</repetitions>
+        <repetitions>3</repetitions>
         <time>30</time>
     </parameters>
     <instances>
@@ -20,15 +20,15 @@
             <orderinjector 
                 exchange="NYSE" 
                 ticker="AAPL"
-                supply_min_low="0" 
-                supply_min_high="20" 
-                supply_max_low="20" 
-                supply_max_high="50"
-                demand_min_low="0" 
-                demand_min_high="20" 
-                demand_max_low="20" 
-                demand_max_high="50"
-                step_mode="fixed" 
+                supply_min_low="140" 
+                supply_min_high="155" 
+                supply_max_low="155" 
+                supply_max_high="170"
+                demand_min_low="130" 
+                demand_min_high="145" 
+                demand_max_low="145" 
+                demand_max_high="160"
+                step_mode="jittered" 
                 time_mode="periodic"
                 use_input_file="true"
                 use_offset="true"

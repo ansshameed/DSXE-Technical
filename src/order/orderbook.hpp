@@ -51,8 +51,14 @@ public:
     /** Returns the best bid in the order book. */
     std::optional<LimitOrderPtr> bestBid();
 
+    /** Returns the worst bid in the order book. */
+    std::optional<LimitOrderPtr> worstBid();
+
     /** Returns the best ask in the order book. */
     std::optional<LimitOrderPtr> bestAsk();
+
+    /** Returns the worst ask in the order book. */
+    std::optional<LimitOrderPtr> worstAsk();
 
     /** Returns the aggregate size of all bids at the best bid price. */
     int bestBidSize();

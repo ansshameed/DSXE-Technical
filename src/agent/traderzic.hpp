@@ -121,8 +121,9 @@ public:
             auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
             if (cust_msg) 
             { 
-                current_customer_order_ = cust_msg; 
-                std::cout << "[ZIC] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[ZIC] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
             }
             return; // Just exit the function
         }
@@ -179,11 +180,12 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
-        if (current_customer_order_.has_value()) 
-        { 
-            limit_price_ = current_customer_order_.value()->price;
-            trader_side_ = current_customer_order_.value()->side;
-            current_customer_order_.reset(); // Clear after processing
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.back(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = std::clamp(cust_order->price, MIN_PRICE, MAX_PRICE);
+            trader_side_ = cust_order->side;
         }
 
         int quantity = 100;
@@ -223,11 +225,12 @@ private:
     std::thread* trading_thread_ = nullptr;
     bool is_trading_ = false;
 
-    constexpr static double MIN_PRICE = 1.0;
+    constexpr static double MIN_PRICE = 0.0;
     constexpr static double MAX_PRICE = 200.0;
     constexpr static double REL_JITTER = 0.25;
 
     std::optional<CustomerOrderMessagePtr> current_customer_order_;
+    std::queue<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif

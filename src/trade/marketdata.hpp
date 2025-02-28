@@ -16,7 +16,9 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
 
         std::string ticker;
         double best_bid;
+        double worst_bid;
         double best_ask;
+        double worst_ask;
         int best_bid_size;
         int best_ask_size;
 
@@ -50,12 +52,12 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
 
         std::string describeCSVHeaders() const override
         {
-            return "timestamp,ticker,best_bid,best_ask,best_bid_size,best_ask_size,bids_volume,asks_volume,bids_count,asks_count"; // CSV headers for the Market Data
+            return "timestamp,ticker,best_bid,best_ask,best_bid_size,best_ask_size,bids_volume,asks_volume,bids_count,asks_count,worst_bid,worst_ask"; // CSV headers for the Market Data
         }
 
         std::string toCSV() const override
         {
-            return std::to_string(timestamp) + "," + ticker + "," + std::to_string(best_bid) + "," + std::to_string(best_ask) + "," + std::to_string(best_bid_size) + "," + std::to_string(best_ask_size) + "," + std::to_string(bids_volume) + "," + std::to_string(asks_volume) + "," + std::to_string(bids_count) + "," + std::to_string(asks_count); 
+            return std::to_string(timestamp) + "," + ticker + "," + std::to_string(best_bid) + "," + std::to_string(best_ask) + "," + std::to_string(best_bid_size) + "," + std::to_string(best_ask_size) + "," + std::to_string(bids_volume) + "," + std::to_string(asks_volume) + "," + std::to_string(bids_count) + "," + std::to_string(asks_count) + "," + std::to_string(worst_bid) + "," + std::to_string(worst_ask); // CSV data for the Market Data
         }
 
     private:
@@ -64,7 +66,9 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
             os << "Market Data: " << data.ticker << ":\n" 
             << "LAST TRADE: " << data.last_quantity_traded << " @ $" << data.last_price_traded << "\n"
             << "BEST BID: " << data.best_bid_size << " @ $" << data.best_bid << "\n" 
+            << "WORST BID: " << data.best_bid_size << " @ $" << data.worst_bid << "\n"
             << "BEST ASK: " << data.best_bid_size << " @ $" << data.best_ask << "\n" 
+            << "WORST ASK: " << data.best_bid_size << " @ $" << data.worst_ask << "\n"
             << "BID VOL: " << data.bids_volume << "\n" 
             << "ASK VOL: " << data.asks_volume << "\n"
             << "BID ORDERS: " << data.bids_count << "\n" 
@@ -82,7 +86,9 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
         {
             ar & ticker;
             ar & best_bid;
+            ar & worst_bid;
             ar & best_ask;
+            ar & worst_ask;
             ar & best_bid_size;
             ar & best_ask_size;
 

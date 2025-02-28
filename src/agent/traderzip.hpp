@@ -57,14 +57,15 @@ public:
             auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
             if (cust_msg) 
             { 
-                current_customer_order_ = cust_msg; 
-                std::cout << "[ZIP] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[ZIP] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
             }
-            return; // Just exit the function
+            return;
         }
-        // If it's not a customer order, call the base class handler
         TraderAgent::handleBroadcastFrom(sender, message);
     }
+
 
     void onTradingStart() override
     {
@@ -353,23 +354,21 @@ private:
 
     void placeOrder()
     {
-        // Cancel previous order
         if (cancelling_ && last_accepted_order_id_.has_value())
         {
             cancelOrder(exchange_, trader_side_, ticker_, last_accepted_order_id_.value());
             last_accepted_order_id_ = std::nullopt;
         }
 
-        if (current_customer_order_.has_value()) 
-        { 
-            // Override trader's default limit price with the customer order's price 
-            limit_price_ = current_customer_order_.value()->price;
-            trader_side_ = current_customer_order_.value()->side;
-            // Optionally, once processed we can clear the current customer order 
-            current_customer_order_.reset(); 
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.back(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = cust_order->price;
+            trader_side_ = cust_order->side;
         }
 
-        // Place new order with a new price
         last_price_ = getQuotePrice();
         int quantity = 100; 
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, last_price_, limit_price_, Order::TimeInForce::GTC, ++last_client_order_id_);
@@ -424,6 +423,7 @@ private:
     constexpr static double REL_JITTER = 0.25;
 
     constexpr static unsigned long MS_TO_NS = 1000000;
+    std::queue<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif

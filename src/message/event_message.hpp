@@ -14,6 +14,7 @@ public:
         BREAK_START,
         BREAK_END,
         ORDER_INJECTION_START, 
+        ORDER_INJECTION_STOP,
         TRADER_READY, 
     };
 

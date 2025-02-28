@@ -8,6 +8,7 @@
 #include "../message/trader_list_message.hpp"
 #include "../message/request_trader_list_message.hpp"
 #include "../message/event_message.hpp"
+#include "traderagent.hpp"
 #include <random>
 #include <thread>
 #include <mutex>
@@ -34,13 +35,14 @@ public:
           config_(config)
         {
 
-            // Automatically connect to exchange on initialisation
+        // Automatically connect to exchange on initialisations
         connect(config->exchange_addr, config->exchange_name, [=, this](){
+            std::cout << "Successfully connected to exchange: " 
+              << config->exchange_name 
+              << " for ticker " << config->ticker << std::endl;
             subscribeToMarket(config->exchange_name, config->ticker);
         });
     }   
-
-    ~OrderInjectorAgent() { terminate(); }
 
     /** Subscribe to market data from the given market. */
     void subscribeToMarket(std::string_view exchange, std::string_view ticker)
@@ -56,25 +58,32 @@ public:
 
     // Gracefully terminates the agent.
     void terminate() override {
+
+        if (injection_thread_ != nullptr)
         {
-            std::unique_lock<std::mutex> lock(mutex_);
-            is_injecting_ = false;
+            injection_thread_->join();
+            delete(injection_thread_);
         }
-        if (injection_thread_ != nullptr) {
-            if (injection_thread_->joinable()) {
-                injection_thread_->join();
+    }
+
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override {
+        if (message->type == MessageType::EVENT) {
+            EventMessagePtr eventMsg = std::dynamic_pointer_cast<EventMessage>(message);
+            if (!eventMsg) {
+                throw std::runtime_error("Failed to cast message to EventMessage");
             }
-            delete injection_thread_;
-            injection_thread_ = nullptr;
+            if (eventMsg->event_type == EventMessage::EventType::TRADING_SESSION_END) {
+                std::cout << "[OrderInjector] Received TRADING_SESSION_END event. Stopping order injection.\n";
+                stopInjecting();
+            }
+            if (eventMsg->event_type == EventMessage::EventType::TRADING_SESSION_START) {
+                std::cout << "[OrderInjector] Received TRADING_SESSION_START event. Starting order injection.\n";
+                startInjecting();
+            }
         }
-        std::cout << "[OrderInjector] Successfully terminated.\n";
+        // Optionally, ignore other message types silently or handle them as needed.
     }
-
-
-    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
-    {
-        std::cout << "Injector received a broadcast" << "\n";
-    }
+    
 
     std::optional<MessagePtr> handleMessageFrom(std::string_view sender, MessagePtr message) override
     {
@@ -108,8 +117,8 @@ public:
                 std::cout << "[OrderInjector] Received ORDER_INJECTION_START event. Beginning order injection.\n";
                 startInjecting();
             } 
-            else if (eventMsg->event_type == EventMessage::EventType::TRADING_SESSION_END) {
-                std::cout << "[OrderInjector] Trading session ended. Stopping order injection.\n";
+            if (eventMsg->event_type == EventMessage::EventType::ORDER_INJECTION_STOP) {
+                std::cout << "[OrderInjector] Received ORDER_INJECTION_STOP event. Stopping order injection.\n";
                 stopInjecting();
             }
         }
@@ -143,16 +152,29 @@ private:
         injection_thread_ = new std::thread([this]() { injectOrders(); });
     }
 
-    void stopInjecting() {
+    void stopInjecting() 
+    {
         std::unique_lock<std::mutex> lock(mutex_);
+        std::cout << "Trading window ended.\n";
         is_injecting_ = false;
+        lock.unlock();
+        if (injection_thread_ != nullptr) {
+            if (injection_thread_->joinable()) {
+                injection_thread_->join();
+            }
+            delete injection_thread_;
+            injection_thread_ = nullptr;
+        }
     }
+    
 
     double getElapsedTime() {
         auto now = std::chrono::high_resolution_clock::now();
-        return std::chrono::duration<double>(now - start_time_).count();
+        double elapsed = std::chrono::duration<double>(now - start_time_).count();
+        std::cout << "[OrderInjector] Elapsed Time: " << elapsed << "s\n";
+        return elapsed;
     }
-
+    
     // Parses a time string "HH:MM:SS" into seconds since midnight.
     static double parseTime(const std::string &time_string) {
         std::tm tm = {};
@@ -208,15 +230,16 @@ private:
         }
 
         double total_time = raw_events.back().first;
+        std::cout << "[OrderInjector] Total Time in CSV: " << total_time << " seconds\n";
         double price_range = max_price - min_price;
-        int scale_factor = 80;
+        int scale_factor = 40;
         std::vector<std::pair<double, int>> offset_events;
 
         for (const auto &event : raw_events) {
             double normalized_time = event.first / total_time;
             double normalized_price = (event.second - min_price) / price_range;
             normalized_price = std::clamp(normalized_price, 0.0, 1.0);
-            int scaled_price = static_cast<int>(normalized_price * scale_factor);
+            int scaled_price = static_cast<int>(std::round(normalized_price * scale_factor));
             offset_events.emplace_back(normalized_time, scaled_price);
         }
         return offset_events;
@@ -225,11 +248,17 @@ private:
     // Computes the offset based on real-world data.
     static int realWorldScheduleOffset(double time, double total_time, const std::vector<std::pair<double, int>> &offset_events) {
         double percent_elapsed = time / total_time;
+        percent_elapsed = std::fmod(percent_elapsed, 1.0);  // Normalize to [0, 1)
+        std::cout << "Percent Elapsed: " << percent_elapsed << std::endl;
+        if (percent_elapsed > 1.0) {
+            percent_elapsed -= std::floor(percent_elapsed); // Keep it in [0,1]
+        }
         int offset = 0;
         for (const auto &event : offset_events) {
+            //std::cout << "Time: " << event.first << " | Offset: " << event.second << std::endl;
+            offset = event.second;  // Keep updating offset
             if (percent_elapsed <= event.first) {
-                offset = event.second;
-                break;
+                break;  // Stop at the first event greater than percent_elapsed
             }
         }
         return offset;
@@ -287,6 +316,7 @@ private:
         if (config_->use_input_file) {
             try {
                 offset_events = getOffsetEventList(injectorConfig->input_file);
+                std::cout << "Using input file for order schedule: " << std::endl;
             } catch (const std::exception& ex) {
                 std::cerr << "[OrderInjector] Failed to load input file: " << ex.what() << "\n";
             }
@@ -304,19 +334,28 @@ private:
         int dMax = demandMaxDist(random_generator_);
         std::string step_mode = injectorConfig->step_mode;
 
-        while (true) { // Continuously inject orders
+        while (true) {
             {
                 std::unique_lock<std::mutex> lock(mutex_);
-                if (!is_injecting_)
+                if (!is_injecting_) {
+                    std::cout << "[OrderInjector] Stopping injection due to TRADING_SESSION_END event.\n";
                     break;
+                }
             }
 
             int offset_value = 0; 
             double elapsed = getElapsedTime();
+            
             if (injectorConfig->use_input_file && !offset_events.empty()) 
             {
                 // Use real-world schedule offset (the total time is normalised to 1.0 here; adjust if needed)
-                offset_value = realWorldScheduleOffset(elapsed, 1.0, offset_events);
+                double total_time = offset_events.back().first;
+                if (total_time <= 0.0) {
+                    std::cerr << "[OrderInjector] Warning: total_time is zero or negative. Using fallback offset.\n";
+                    total_time = 1.0;  // Assign a default value to avoid division by zero
+                }
+                offset_value = realWorldScheduleOffset(elapsed, total_time, offset_events);
+                std::cout << "[OrderInjector] Real-world offset: " << offset_value << std::endl;
             } 
             else if (config_->use_offset) {
                 offset_value = scheduleOffset(elapsed);
@@ -360,7 +399,7 @@ private:
         int final_price = std::clamp(base_price + offset_value, 1, 9999); // Clamp final price between 1 and 9999
 
         if (step_mode == "jittered") {
-            std::uniform_int_distribution<int> jitterDist(-5, 5);
+            std::uniform_int_distribution<int> jitterDist(-2, 2);
             final_price += jitterDist(random_generator_);
         } 
         else if (step_mode == "random") 
@@ -396,15 +435,14 @@ private:
 
         try {
             sendBroadcast(target_trader, std::static_pointer_cast<Message>(customer_msg));
-            std::cout << "[OrderInjector] Sent customer order to trader (" << target_trader << "): "
-                      << (side == Order::Side::BID ? "BID" : "ASK") << " @ " << final_price << std::endl;
+            std::cout << "[OrderInjector] Sent customer order to trader (" << target_trader << "): "<< (side == Order::Side::BID ? "BID" : "ASK") << " @ " << final_price << std::endl;
         }
         catch (const std::runtime_error &e) {
             std::cerr << "[OrderInjector] Failed to send customer order to trader (" << target_trader
                       << "): " << e.what() << std::endl;
         } 
 
-        std::cout << "[OrderInjector] Sent customer order to trader (" << target_trader << "): " << (side == Order::Side::BID ? "BID" : "ASK") << " @ " << final_price << std::endl;
+        //std::cout << "[OrderInjector] Sent customer order to trader (" << target_trader << "): " << (side == Order::Side::BID ? "BID" : "ASK") << " @ " << final_price << std::endl;
     }
 };
 

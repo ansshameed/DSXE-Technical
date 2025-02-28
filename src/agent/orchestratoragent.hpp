@@ -47,6 +47,22 @@ public:
                     configureNode(exchange_config);
                 }
 
+                if (i == 0) // Only initialise the injector on the first iteration so it injects constantly in rest of simulation. 
+                { 
+
+                    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for exchanges to launch
+
+                    for (auto injector_config : simulation->injectors())
+                    {
+                        std::cout << "Initialising injector: "
+                                    << injector_config->addr 
+                                    << " for exchange " 
+                                    << std::dynamic_pointer_cast<OrderInjectorConfig>(injector_config)->exchange_name
+                                    << std::endl;
+                        configureNode(injector_config);
+                    } 
+                }
+
                 // Allow exchanges to initialise first
                 std::this_thread::sleep_for(std::chrono::seconds(10));
 
@@ -60,28 +76,10 @@ public:
                     configureNode(trader_config);
                 }
 
-                for (auto injector_config : simulation->injectors())
-                {
-                    std::cout << "Initialising injector: "
-                                << injector_config->addr 
-                                << " for exchange " 
-                                << std::dynamic_pointer_cast<OrderInjectorConfig>(injector_config)->exchange_name
-                                << std::endl;
-                    configureNode(injector_config);
-                    std::this_thread::sleep_for(std::chrono::seconds(2));
-                    sendTraderListToInjector(injector_config); 
-                }
-
-                std::cout << "[Orchestrator] Sending ORDER_INJECTION_START event to Order Injector.\n";
-                EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
                 for (auto injector_config : simulation->injectors()) {
-                    sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(order_inject_start_msg));
+                    sendTraderListToInjector(injector_config);
                 }
 
-                // Allow injection before starting trading
-                std::this_thread::sleep_for(std::chrono::seconds(10));
-
-                // Initialise watchers
                 for (auto watcher_config : simulation->watchers())
                 {
                     std::cout << "Initialising watcher: "
@@ -94,6 +92,17 @@ public:
                     configureNode(watcher_config);
                 }
 
+                std::cout << "[Orchestrator] Sending ORDER_INJECTION_START event to Order Injector.\n";
+                EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
+                for (auto injector_config : simulation->injectors()) {
+                    sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(order_inject_start_msg));
+                }
+
+                // Allow injection before starting trading
+                std::this_thread::sleep_for(std::chrono::seconds(10));
+
+                // Initialise watcher
+
                 // Allow watcher to initialise first
                 std::this_thread::sleep_for(std::chrono::seconds(2));
 
@@ -102,19 +111,14 @@ public:
                 std::cout << "Waiting " << simulation->time() << " seconds for simulation trial to end..." << std::endl;
                 std::this_thread::sleep_for(std::chrono::seconds(simulation->time()));
 
-                // Cleanup Phase 
-                std::cout << "Cleaning up trader processes..." << std::endl;
-                int ret = system("pkill -f 'simulation node --port 81'"); // TEMPORARY FIX UNTIL AWS LAUNCH
-                if(ret != 0) {
-                    std::cerr << "Warning: Failed to terminate some trader processes." << std::endl;
-                }
-                // Allow a short delay to let sockets and ports be released.
-                std::this_thread::sleep_for(std::chrono::seconds(3));
-
                 trader_addresses_.clear();
                 std::cout << "Cleared trader addresses for next trial." << std::endl;
             }
             std::cout << "Finished all " << simulation->repetitions() << " simulation trials." << std::endl;
+            EventMessagePtr stop_injection_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_STOP);
+            for (auto injector_config : simulation->injectors()) {
+                sendMessageTo(std::to_string(injector_config->agent_id), std::static_pointer_cast<Message>(stop_injection_msg));
+            }
         });
     }
 
@@ -124,8 +128,6 @@ public:
         //std::cout << "sending config message to: " << config->addr << std::endl; // DEBUG
         std::cout << "Initialising agent: " << to_string(config->type) << " with addr: " << config->addr << "\n"; // DEBUG
         this->connect(std::string(config->addr), std::to_string(config->agent_id), [=, this](){
-
-            addToAddressBook(config->addr, std::to_string(config->agent_id));
             std::cout << "[DEBUG] Registered agent: " << config->addr << " as ID " << config->agent_id << "\n";
             ConfigMessagePtr msg = std::make_shared<ConfigMessage>();
             msg->config = config;

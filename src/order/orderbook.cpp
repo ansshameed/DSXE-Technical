@@ -81,6 +81,31 @@ std::optional<LimitOrderPtr> OrderBook::bestBid()
     return bids_.top();
 }
 
+std::optional<LimitOrderPtr> OrderBook::worstBid() 
+{
+    if (bids_.empty()) 
+    {
+        return std::nullopt;
+    }
+
+    // Convert priority queue to a vector (inefficient but works)
+    std::vector<LimitOrderPtr> all_orders;
+    auto copy = bids_;  // Make a copy since we cannot iterate directly
+
+    while (!copy.empty()) 
+    {
+        all_orders.push_back(copy.top());
+        copy.pop();
+    }
+
+    // Worst bid is the lowest price order
+    auto worst_bid = *std::min_element(all_orders.begin(), all_orders.end(), 
+        [](const LimitOrderPtr& a, const LimitOrderPtr& b) { return a->price < b->price; });
+
+    return worst_bid;
+}
+
+
 int OrderBook::bestBidSize()
 {
     std::optional<LimitOrderPtr> best_bid = bestBid();
@@ -102,6 +127,31 @@ std::optional<LimitOrderPtr> OrderBook::bestAsk()
     }
     return asks_.top();
 }
+
+std::optional<LimitOrderPtr> OrderBook::worstAsk() 
+{
+    if (asks_.empty()) 
+    {
+        return std::nullopt;
+    }
+
+    // Convert priority queue to a vector (inefficient but works)
+    std::vector<LimitOrderPtr> all_orders;
+    auto copy = asks_;  // Make a copy since we cannot iterate directly
+
+    while (!copy.empty()) 
+    {
+        all_orders.push_back(copy.top());
+        copy.pop();
+    }
+
+    // Worst ask is the highest price order
+    auto worst_ask = *std::max_element(all_orders.begin(), all_orders.end(), 
+        [](const LimitOrderPtr& a, const LimitOrderPtr& b) { return a->price < b->price; });
+
+    return worst_ask;
+}
+
 
 int OrderBook::bestAskSize()
 {

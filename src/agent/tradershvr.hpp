@@ -81,8 +81,9 @@ public:
             auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
             if (cust_msg) 
             { 
-                current_customer_order_ = cust_msg; 
-                std::cout << "[SHVR] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[SHVR] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
             }
             return; // Just exit the function
         }
@@ -104,12 +105,14 @@ private:
     double getShaverPrice(MarketDataMessagePtr msg)
     {
         double price;
+
         if (current_customer_order_.has_value()) 
         {
-            price = current_customer_order_.value()->price;
-            current_customer_order_.reset(); // Clear after processing
+            limit_price_ = current_customer_order_.value()->price;
+            //current_customer_order_.reset(); // Clear after processing
         }
-        else if (trader_side_ == Order::Side::BID)
+    
+        if (trader_side_ == Order::Side::BID)
         {
             price = std::min(msg->data->best_bid + 1, limit_price_);
         }
@@ -117,8 +120,10 @@ private:
         {
             price = std::max(msg->data->best_ask - 1, limit_price_);
         }
+
         return price;
     }
+
 
     std::string exchange_;
     std::string ticker_;
@@ -131,6 +136,8 @@ private:
     constexpr static double MAX_PRICE = 200.0;
 
     std::optional<CustomerOrderMessagePtr> current_customer_order_;
+    std::mutex mutex_;
+    std::queue<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif
