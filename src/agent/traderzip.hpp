@@ -367,11 +367,12 @@ private:
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
-            trader_side_ = cust_order->side;
+            //trader_side_ = cust_order->side;
         }
 
         last_price_ = getQuotePrice();
-        int quantity = 100; 
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, last_price_, limit_price_, Order::TimeInForce::GTC, ++last_client_order_id_);
         std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << 100 << " @ " << last_price_ << "\n";
     }

@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <unordered_map>
 #include <condition_variable>
+#include <cmath> 
 
 
 class OrderInjectorAgent : public Agent 
@@ -280,7 +281,7 @@ private:
         double interval = config_->interval; // interval from config (in seconds)
         if (config_->time_mode == "periodic") 
         {
-            return interval;
+            return interval; 
         } 
         else if (config_->time_mode == "drip-fixed") 
         {
@@ -361,7 +362,7 @@ private:
                 offset_value = scheduleOffset(elapsed);
             }
 
-            std::uniform_int_distribution<> ordersCountDist(2, 5);
+            std::uniform_int_distribution<> ordersCountDist(5, 10);
             int numOrders = ordersCountDist(random_generator_);
 
             for (int i = 0; i < numOrders; ++i) {
@@ -373,10 +374,10 @@ private:
                     }
                 }
                 injectSingleOrder(sMin, sMax, dMin, dMax, offset_value, step_mode);
-                std::this_thread::sleep_for(std::chrono::milliseconds(100 + (rand() % 200)));
+                std::this_thread::sleep_for(std::chrono::milliseconds(50 + (rand() % 100)));
             }
             double delay = getNextIssueDelay(trader_addresses_.size());
-            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(delay * 1000)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(delay * 250)));
         }
         std::cout << "[OrderInjector] Finished active injection.\n";
     }
@@ -421,7 +422,8 @@ private:
         customer_msg->client_order_id = next_client_order_id_++; 
         customer_msg->ticker = ticker_;
         customer_msg->side = side;
-        customer_msg->quantity = 100;
+        std::uniform_int_distribution<int> dist(10, 50);
+        customer_msg->quantity = dist(random_generator_);
         customer_msg->price = final_price;
         customer_msg->priv_value = -1.0; // if you need or want some “private value”
 

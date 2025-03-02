@@ -195,9 +195,9 @@ void TraderAgent::bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & or
     double profit = 0.0; 
 
     if (order->side == Order::Side::BID) {
-        profit = (order->price - trade->price);
+        profit = (order->priv_value - trade->price); 
     } else {
-        profit = (trade->price - order->price);
+        profit = (trade->price - order->priv_value); 
     } 
 
     balance += profit; 

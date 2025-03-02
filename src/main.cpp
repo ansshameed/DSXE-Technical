@@ -221,9 +221,9 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback = 20; // Example values
+        int lookback = 10; // Example values
         bool use_stoch_rsi = false; // Example values
-        int stoch_lookback = 16; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
+        int stoch_lookback = 6; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
         int n_to_smooth = 2; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
 
         std::shared_ptr<TraderRSI> trader (new TraderRSI{&entity, config, lookback, use_stoch_rsi, stoch_lookback, n_to_smooth});
@@ -242,12 +242,12 @@ void local_runner(int argc, char** argv)
     config->limit = vm["limit"].as<double>();
     config->delay = vm["delay"].as<unsigned int>();
 
-    int short_length = 12; // Example values
-    int long_length = 26; // Example values
-    int signal_length = 9; // Example values
-    double threshold = 0.5; // Example values
+    int short_length = 6; // Example values
+    int long_length = 12; // Example values
+    int signal_length = 5; // Example values
+    double threshold = 0.2; // Example values
     int n_to_smooth = 1; // Example values
-    size_t lookback_period = 14; // Example values
+    int lookback_period = 15; // Example values
 
     std::shared_ptr<TraderMACD> trader (new TraderMACD{&entity, config, short_length, long_length, signal_length, threshold, n_to_smooth, lookback_period});
     entity.setAgent(std::static_pointer_cast<Agent>(trader));
@@ -265,9 +265,9 @@ void local_runner(int argc, char** argv)
     config->limit = vm["limit"].as<double>();
     config->delay = vm["delay"].as<unsigned int>();
 
-    int lookback_period = 14; // Example value (recommended use 5 for faster responsiveness)
-    int delta_length = 4; // Example values
-    double threshold = 10; // Example values
+    int lookback_period = 10; // Example value (recommended use 5 for faster responsiveness)
+    int delta_length = 1; // Example values
+    double threshold = 0.02; // Example values
 
     std::shared_ptr<TraderOBVDelta> trader (new TraderOBVDelta{&entity, config, lookback_period, delta_length, threshold});
     entity.setAgent(std::static_pointer_cast<Agent>(trader));
@@ -285,7 +285,7 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_period = 20; // Example value
+        int lookback_period = 10; // Example value
         double std_dev_multiplier = 1.0; // Example value
 
         std::shared_ptr<TraderBollingerBands> trader (new TraderBollingerBands{&entity, config, lookback_period, std_dev_multiplier});
@@ -322,9 +322,9 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_bb = 14; // Example values
-        int lookback_rsi = 14; // Example values
-        double std_dev_multiplier = 1.5; // Example value
+        int lookback_bb = 10; // Example values
+        int lookback_rsi = 10; // Example values
+        double std_dev_multiplier = 1.0; // Example value
 
         std::shared_ptr<TraderBBRSI> trader (new TraderBBRSI{&entity, config, lookback_bb, lookback_rsi, std_dev_multiplier});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
@@ -342,10 +342,10 @@ void local_runner(int argc, char** argv)
         config->limit = vm["limit"].as<double>();
         config->delay = vm["delay"].as<unsigned int>();
 
-        int lookback_vwap = 14; // Example value
+        int lookback_vwap = 10; // Example value
         int lookback_obv = 10; // Example value
-        int delta_length = 3; // Example values
-        double threshold = 2; // Example values
+        int delta_length = 1; // Example values
+        double threshold = 0.02; // Example values
 
         std::shared_ptr<TraderVWAPOBVDelta> trader (new TraderVWAPOBVDelta{&entity, config, lookback_vwap, lookback_obv, delta_length, threshold});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));

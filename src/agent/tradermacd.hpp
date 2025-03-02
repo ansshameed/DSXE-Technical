@@ -9,7 +9,7 @@
 class TraderMACD : public TraderAgent
 {
 public:
-    TraderMACD(NetworkEntity *network_entity, TraderConfigPtr config, int short_length, int long_length, int signal_length, double threshold, int n_to_smooth, size_t lookback_period)
+    TraderMACD(NetworkEntity *network_entity, TraderConfigPtr config, int short_length, int long_length, int signal_length, double threshold, int n_to_smooth, int lookback_period)
     : TraderAgent(network_entity, config),
       exchange_{config->exchange_name},
       ticker_{config->ticker},
@@ -51,7 +51,6 @@ public:
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
-        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
@@ -60,8 +59,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -97,6 +98,24 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[MACD] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function, don’t call base handler
+        }
+
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
 private:
 
     double getRandom(double lower, double upper)
@@ -121,31 +140,29 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (timeNow() >= next_trade_timestamp_)
+
+                if (prices_.size() >= lookback_period_) 
                 {
-                    std::vector<double> price_copy;
+                    // Compute MACD (and signal) on the local copy.
+                    auto [macd_line, signal_line] = calculateMACD(prices_);
+                    
+                    // Additional safety check
+                    if (!macd_line.empty() && !signal_line.empty())
                     {
-                        std::unique_lock<std::mutex> inner_lock(mutex_);
-                        price_copy = prices_;
-                    }
-                    if (!price_copy.empty())
-                    {
-                        // Compute MACD (and signal) on the local copy.
-                        auto [macd_line, signal_line] = calculateMACD(price_copy);
                         double macd = macd_line.back();
                         double signal = signal_line.back();
                         double histogram = macd - signal;
-                        std::cout << "MACD: " << macd << ", Signal: " << signal << ", Histogram: " << histogram << "\n";
-                        // Use MACD histogram as a threshold trigger.
-                        if ((trader_side_ == Order::Side::BID && histogram > threshold_) ||
-                            (trader_side_ == Order::Side::ASK && histogram < -threshold_))
-                        {
-                            double last_price = price_copy.back();
-                            placeOrder(histogram, last_price);
-                        }
+                        
+                        std::cout << "MACD: " << macd 
+                                << ", Signal: " << signal 
+                                << ", Histogram: " << histogram 
+                                << ", Threshold: " << threshold_ 
+                                << "\n";
+                        
+                        placeOrder(histogram, prices_.back());
                     }
-                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
                 }
+
                 sleep();
                 lock.lock();
             }
@@ -154,75 +171,86 @@ private:
         });
     }
 
-    void placeOrder(double macd_value, double last_price)
+    void placeOrder(double histogram, double last_price)
     {
+
+        std::cout << "Order Placement Attempt:\n"
+        << "Histogram: " << histogram << "\n"
+        << "Threshold: " << threshold_ << "\n"
+        << "Trader Side: " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << "\n"
+        << "Last Market Data: " << (last_market_data_.has_value() ? "Available" : "NOT Available") << "\n";
+        
         if (cancelling_ && last_accepted_order_id_.has_value())
         {
             cancelOrder(exchange_, trader_side_, ticker_, last_accepted_order_id_.value());
             last_accepted_order_id_ = std::nullopt;
         }
-        int quantity = 100;
-        if (!last_market_data_.has_value())
-        {
-            std::cout << "No market data available, skipping order placement.\n";
-            return;
+
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.top(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = cust_order->price;
         }
+
         double best_bid = last_market_data_.value()->best_bid;
         double best_ask = last_market_data_.value()->best_ask;
-        double rounded_macd = std::round(macd_value);
-        if (best_bid <= 0 || best_ask <= 0)
-        {
-            std::cout << "No valid bid/ask data, skipping order placement.\n";
-            return;
-        }
-        double price = getQuotePrice(rounded_macd, best_bid, best_ask, trader_side_);
-        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK")
-                  << " " << quantity << " @ " << price 
-                  << " (MACD: " << rounded_macd << " | Best Bid: " << best_bid 
-                  << " | Best Ask: " << best_ask << ")\n";
-    }
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
 
-    // Determines a quote price based on the MACD value and current bid/ask, applying a slippage ("shaver").
-    double getQuotePrice(double rounded_macd, double best_bid, double best_ask, Order::Side side)
-    {
-        double price;
-        double slippage = std::round(getRandom(-1, 1)); // small variation in price
-        if (side == Order::Side::BID)
+        bool should_place_order = false;
+        std::cout << "Trade conditions: ";
+        if (trader_side_ == Order::Side::BID && histogram > threshold_) 
         {
-            if (rounded_macd > best_ask)
-            {
-                price = best_bid + 1 + slippage;
-            }
-            else
-            {
-                price = best_bid + slippage;
-            }
-            return std::min(price, limit_price_);
+            should_place_order = true;
+        }
+        else if (trader_side_ == Order::Side::ASK && histogram < -threshold_)
+        {
+            should_place_order = true;
+        }
+
+        if (should_place_order) 
+        {
+            double price = getQuotePrice(best_bid, best_ask);
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " (MACD Histogram: " << histogram << " | Best Bid: " << best_bid << " | Best Ask: " << best_ask << ")\n";
         }
         else
         {
-            if (rounded_macd < best_bid)
-            {
-                price = best_ask - 1 + slippage;
-            }
-            else
-            {
-                price = best_ask + slippage;
-            }
-            return std::max(price, limit_price_);
+            std::cout << "Trade conditions NOT met. No order placed.\n";
         }
+
+
+    }
+
+    // Determines a quote price based on the MACD value and current bid/ask, applying a slippage ("shaver").
+    double getQuotePrice(double best_bid, double best_ask)
+    {
+        double candidate_price = 0.0;
+        
+        if (trader_side_ == Order::Side::BID)
+        {
+            candidate_price = best_ask; // Immediately buy by lifting the ask
+            candidate_price = std::min(limit_price_, candidate_price); // Ensure price is not higher than the limit price
+        }
+        else
+        {
+            candidate_price = best_bid; // Immediately sell by hitting the bid
+            candidate_price = std::max(limit_price_, candidate_price); // Ensure price is not lower than the limit price
+        }
+        
+        return candidate_price;
     }
 
     void reactToMarket(MarketDataMessagePtr msg)
     {
-        std::unique_lock<std::mutex> lock(mutex_);
         double price = msg->data->last_price_traded;
         prices_.push_back(price);
         highs_.push_back(msg->data->high_price);
         lows_.push_back(msg->data->low_price);
         closes_.push_back(price);
         updateRollingWindow(msg->data->high_price, msg->data->low_price);
+
         if (prices_.size() > lookback_period_)
         {
             prices_.erase(prices_.begin());
@@ -230,9 +258,9 @@ private:
             lows_.erase(lows_.begin());
             closes_.erase(closes_.begin());
         }
-        lock.unlock();
+
         last_market_data_ = msg->data;
-        std::cout << "Stored Market Data - Price: " << price << "\n";
+        std::cout << "Stored Market Data - Price: " << price << ", Prices size: " << prices_.size() << "\n";
     }
 
     void updateRollingWindow(double high_price, double low_price)
@@ -260,13 +288,15 @@ private:
         double signal_alpha = 2.0 / (signal_length_ + 1.0); // Calculate alpha for signal line (9-period)
 
         // Calculate MACD line and EMAs for each price point. 
-        for (size_t icase = 1; icase < prices_.size(); ++icase) // Loop through each price point
+        for (int icase = 1; icase < prices_.size(); ++icase) // Loop through each price point
         {
             long_sum = long_alpha * prices_[icase] + (1.0 - long_alpha) * long_sum; // Calculate long EMA
             short_sum = short_alpha * prices_[icase] + (1.0 - short_alpha) * short_sum; // Calculate short EMA
             double diff = 0.5 * (long_length_ - 1.0) - 0.5 * (short_length_ - 1.0); // Calculate difference between long and short EMA lengths
             double denom = std::sqrt(std::abs(diff)); // Normalisation factor for MACD using EMA difference
-            denom *= ATR(icase, lookback_period_); // Normalisation factor scaled by ATR to account for volatility
+            denom *= ATR(icase, lookback_period_);
+            if (std::abs(denom) < 1e-10) // Avoid divide-by-zero
+                denom = 1e-10;  
             macd_line[icase] = (short_sum - long_sum) / (denom + 1.e-15); // MACD normalisation 
             macd_line[icase] = 100.0 * normal_cdf(1.0 + macd_line[icase]) - 50.0; // Normalise MACD to 0-100 scale (applies normal cumulative distributin function to MACD; CDF) 
 
@@ -274,7 +304,7 @@ private:
         }
 
         signal_line[0] = macd_line[0]; // Calculate the signal line as an EMA of the MACD line
-        for (size_t icase = 1; icase < macd_line.size(); ++icase) // Loop through each price point
+        for (int icase = 1; icase < macd_line.size(); ++icase) // Loop through each price point
         {
             signal_line[icase] = signal_alpha * macd_line[icase] + (1.0 - signal_alpha) * signal_line[icase - 1]; // Calculate signal line as EMA of MACD line using signal_alpha as smoothing factor
         }
@@ -283,7 +313,7 @@ private:
         {
             double alpha = 2.0 / (n_to_smooth_ + 1.0); // Calculate alpha for additional smoothing
             double smoothed = macd_line[0]; // Initialise smoothed MACD line with first MACD value
-            for (size_t icase = 1; icase < macd_line.size(); ++icase) // Loop through each price point
+            for (int icase = 1; icase < macd_line.size(); ++icase) // Loop through each price point
             {
                 smoothed = alpha * macd_line[icase] + (1.0 - alpha) * smoothed; // Apply additional smoothing to MACD line
                 macd_line[icase] -= smoothed; // Subtract smoothed MACD line from MACD line
@@ -294,16 +324,16 @@ private:
     }
 
 
-    double ATR(size_t end, size_t lookback)
+    double ATR(int end, int lookback)
     {
         if (end < lookback) { // If not enough values to calculate ATR
             lookback = end + 1; // Adjust lookback if not enough values to include all available data points 
         }
     
         double atr = 0.0; // Initialise ATR with zero (accumulate total true range over lookback period)
-        size_t start = end - lookback + 1; // Calculate start index for ATR calculation for rolling window 
+        int start = end - lookback + 1; // Calculate start index for ATR calculation for rolling window 
 
-        for (size_t i = start; i <= end; ++i) // Loop through rolling window to calculate the TR (True Range) for each period and accumulate total ATR
+        for (int i = start; i <= end; ++i) // Loop through rolling window to calculate the TR (True Range) for each period and accumulate total ATR
         {
             //high_window_[i - start] = highs_[i]; = high price for the current time period, low_window_[i - start] = lows_[i]; = low price for the current time period, closes_[i - 1] = closes_[i - 1]; = closing price for the previous time period
             double high_low = high_window_[i - start] - low_window_[i - start]; // High-low range for the current time period (difference between high and low prices for current period)
@@ -333,12 +363,6 @@ private:
         std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time_ms));
     }
 
-    unsigned long long timeNow()
-    {
-        return std::chrono::duration_cast<std::chrono::nanoseconds>(
-            std::chrono::system_clock::now().time_since_epoch()).count();
-    }
-
     // Member variables.
     std::string exchange_;
     std::string ticker_;
@@ -351,7 +375,7 @@ private:
     int signal_length_;
     double threshold_;
     int n_to_smooth_;
-    size_t lookback_period_;
+    int lookback_period_;
     std::vector<double> prices_;
     std::vector<double> highs_;
     std::vector<double> lows_;
@@ -367,6 +391,7 @@ private:
     unsigned long next_trade_timestamp_;
     constexpr static double REL_JITTER = 0.25;
     constexpr static unsigned long MS_TO_NS = 1000000;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif

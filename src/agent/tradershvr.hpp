@@ -44,7 +44,8 @@ public:
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {   
         std::cout << "Received market data from " << exchange << "\n";
-        int quantity = 100;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
         if (is_trading_) 
         {
             double price = getShaverPrice(msg);
@@ -140,6 +141,8 @@ private:
     std::optional<CustomerOrderMessagePtr> current_customer_order_;
     std::mutex mutex_;
     std::stack<CustomerOrderMessagePtr> customer_orders_;
+
+    std::mt19937 random_generator_;
 };
 
 #endif

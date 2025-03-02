@@ -470,7 +470,7 @@ AgentConfigPtr ConfigReader::configureTraderFromCSV(int id, const std::string& a
     trader_config->side = (side == "buy") ? Order::Side::BID : Order::Side::ASK;
 
     // Assign a different limit price per trader - DEBUG TO TEST PROFITABILIITY BY TESTING RANDOM LIMIT PRICES
-    std::uniform_int_distribution<int> dist(140, 160); // Range of limit prices
+    std::uniform_int_distribution<int> dist(100, 200); // Range of limit prices
     static std::random_device rd; // Random seed
     static std::mt19937 gen(rd()); // Random number generator
     trader_config->limit = dist(gen);
@@ -516,7 +516,7 @@ AgentConfigPtr ConfigReader::configureTraderZIPFromCSV(
 
     // Set default values
 
-    std::uniform_int_distribution<int> dist(140, 160); // Range of limit prices
+    std::uniform_int_distribution<int> dist(100, 200); // Range of limit prices
     static std::random_device rd; // Random seed
     static std::mt19937 gen(rd()); // Random number generator
     zip_config->limit = dist(gen);

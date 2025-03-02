@@ -26,6 +26,8 @@ public:
             trade->seller_name = resting_order->agent_name; 
             trade->buyer_priv_value = aggressing_order->priv_value;
             trade->seller_priv_value = resting_order->priv_value;
+            trade->buyer_profit = (trade->buyer_priv_value - trade->price);
+            trade->seller_profit = (trade->price - trade->seller_priv_value);
         }
         else
         {
@@ -35,6 +37,8 @@ public:
             trade->seller_name = aggressing_order->agent_name;
             trade->buyer_priv_value = resting_order->priv_value;
             trade->seller_priv_value = aggressing_order->priv_value;
+            trade->buyer_profit = (trade->buyer_priv_value - trade->price);
+            trade->seller_profit = (trade->price - trade->seller_priv_value);
         }
         trade->aggressing_order_id = aggressing_order->id;
         trade->resting_order_id = resting_order->id;
@@ -59,6 +63,8 @@ public:
             trade->seller_name = resting_order->agent_name; 
             trade->buyer_priv_value = aggressing_order->priv_value;
             trade->seller_priv_value = resting_order->priv_value;
+            trade->buyer_profit = (trade->buyer_priv_value - trade->price);
+            trade->seller_profit = (trade->price - trade->seller_priv_value);
         }
         else
         {
@@ -68,6 +74,8 @@ public:
             trade->seller_name = aggressing_order->agent_name;
             trade->buyer_priv_value = resting_order->priv_value;
             trade->seller_priv_value = aggressing_order->priv_value;
+            trade->buyer_profit = (trade->buyer_priv_value - trade->price);
+            trade->seller_profit = (trade->price - trade->seller_priv_value);
         }
         trade->aggressing_order_id = aggressing_order->id;
         trade->resting_order_id = resting_order->id;

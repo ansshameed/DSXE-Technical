@@ -65,9 +65,9 @@ public:
             }
             case AgentType::TRADER_RSI:
             {
-                int lookback = 20; // Default lookback period for RSI
+                int lookback = 10; // Default lookback period for RSI
                 bool use_stoch_rsi = false; // Example values
-                int stoch_lookback = 16; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
+                int stoch_lookback = 6; // Example values (slightly shorter than standard lookback for sensitive price changes i.e. faster signals) 
                 int n_to_smooth = 2; // Example values (1 = no smoothing, higher = smoother signals i.e. reducing short-term fluctuations to identify trends easier with minimising noise from rapid price changes)
 
                 std::shared_ptr<Agent> agent (new TraderRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback, use_stoch_rsi, stoch_lookback, n_to_smooth});
@@ -75,50 +75,50 @@ public:
             }
             case AgentType::TRADER_MACD:
             {
-                int short_period = 12; // Fast EMA period 
-                int long_period = 26; // Slow EMA period 
-                int signal_period = 9; // Signal line period (EMA of MACD line)
-                double threshold = 0.5; // Minimum difference threshold between MACD and signal line (histogram) to trigger a trade 
+                int short_period = 6; // Fast EMA period 
+                int long_period = 12; // Slow EMA period 
+                int signal_period = 5; // Signal line period (EMA of MACD line)
+                double threshold = 0.2; // Minimum difference threshold between MACD and signal line (histogram) to trigger a trade 
                 int n_to_smooth = 1; // No. of additional smoothing steps applied to MACD line (1 = minimal or no extra smoothign)
-                size_t lookback_period = 14; // Lookback period for ATR calculation (normalisation factor)
+                int lookback_period = 15; // Lookback period for ATR calculation (normalisation factor)
                 std::shared_ptr<Agent> agent (new TraderMACD{network_entity, std::static_pointer_cast<TraderConfig>(config), short_period, long_period, signal_period, threshold, n_to_smooth, lookback_period});
                 return agent;
             }
             case AgentType::TRADER_OBV_DELTA: 
             { 
-                int lookback_period = 14; // Default lookback period for OBV Delta
-                int delta_length = 4; // Default delta length for OBV Delta
-                double threshold = 10; // Default threshold for OBV Delta (5-10% of average total volume) 
+                int lookback_period = 10; // Default lookback period for OBV Delta
+                int delta_length = 1; // Default delta length for OBV Delta
+                double threshold = 0.02; // Default threshold for OBV Delta (5-10% of average total volume) 
                 std::shared_ptr<Agent> agent (new TraderOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, delta_length, threshold});
                 return agent;
             }
             case AgentType::TRADER_BOLLINGER_BANDS: 
             {   
-                int lookback_period = 14; 
-                double std_dev_multiplier = 2.0; // Default standard deviation multiplier for Bollinger Bands
+                int lookback_period = 10; 
+                double std_dev_multiplier = 1.0; // Default standard deviation multiplier for Bollinger Bands
                 std::shared_ptr<Agent> agent (new TraderBollingerBands{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period, std_dev_multiplier});
                 return agent;
             }
             case AgentType::TRADER_VWAP: 
             { 
-                int lookback_period = 14; // Default lookback period for VWAP
+                int lookback_period = 10; // Default lookback period for VWAP
                 std::shared_ptr<Agent> agent (new TraderVWAP{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_period});
                 return agent;
             }
             case AgentType::TRADER_RSI_BB: 
             { 
-                int lookback_bb = 14; // Default lookback period for Bollinger Bands
-                int lookback_rsi = 20; // Default lookback period for RSI
-                double std_dev_multiplier = 2.0; // Default standard deviation multiplier for Bollinger Bands
+                int lookback_bb = 10; // Default lookback period for Bollinger Bands
+                int lookback_rsi = 10; // Default lookback period for RSI
+                double std_dev_multiplier = 1.0; // Default standard deviation multiplier for Bollinger Bands
                 std::shared_ptr<Agent> agent (new TraderBBRSI{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_bb, lookback_rsi, std_dev_multiplier});
                 return agent;
             }
             case AgentType::TRADER_OBV_VWAP: 
             { 
-                int lookback_vwap = 15; // Default lookback period for VWAP
-                int lookback_obv = 12; // Default lookback period for OBV
-                int delta_length = 5; // Default delta length for OBV Delta
-                double threshold = 5; // Default threshold for OBV Delta (5-10% of average total volume) 
+                int lookback_vwap = 10; // Default lookback period for VWAP
+                int lookback_obv = 10; // Default lookback period for OBV
+                int delta_length = 1; // Default delta length for OBV Delta
+                double threshold = 0.02; // Default threshold for OBV Delta (5-10% of average total volume) 
                 std::shared_ptr<Agent> agent (new TraderVWAPOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_vwap, lookback_obv, delta_length, threshold});
                 return agent;
             }

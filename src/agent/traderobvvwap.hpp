@@ -49,7 +49,6 @@ public:
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
-        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
@@ -58,8 +57,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -96,6 +97,24 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[OBV + VWAP] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function, don’t call base handler
+        }
+
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
 private:
 
     double getRandom(double lower, double upper)
@@ -120,33 +139,17 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (timeNow() >= next_trade_timestamp_)
+                if (price_volume_data_.size() >= lookback_vwap_ && close_prices_.size() >= lookback_obv_)
                 {
-                    if (!price_volume_data_.empty() && !close_prices_.empty())
-                    {
-                        double rolling_vwap = calculateVWAP(price_volume_data_);
-                        std::vector<double> delta_obv_values = calculateOBVDelta();
-
-                        if (!delta_obv_values.empty())
-                        {
-                            double delta_obv = delta_obv_values.back();
-                            placeOrder(delta_obv, rolling_vwap);
-                        }
-                        else
-                        {
-                            std::cerr << "ERROR: OBV Delta vector is empty! No order placed.\n";
-                        }
-                    }
-                    else
-                    {
-                        std::cout << "Not enough data to place an order.\n";
-                    }
-                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
-                }
+                    double rolling_vwap = calculateVWAP(price_volume_data_);
+                    std::vector<double> delta_obv_values = calculateOBVDelta();
+                    placeOrder(delta_obv_values.back(), rolling_vwap);
+                } 
                 sleep();
                 lock.lock();
             }
             lock.unlock();
+            std::cout << "Finished actively trading.\n";
         });
     }
 
@@ -191,50 +194,70 @@ private:
             last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
         }
 
-        int quantity = 100; 
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.top(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = cust_order->price;
+            trader_side_ = cust_order->side;
+        } 
+
+        std::uniform_int_distribution<int> dist(10, 50);  
+        int quantity = dist(random_generator_);     
         double best_bid = last_market_data_.value()->best_bid; //Get best bid price from market data
         double best_ask = last_market_data_.value()->best_ask; //Get best ask price from market data
-
-        if (!last_market_data_.has_value() || best_bid <= 0 || best_ask <= 0) {
-            std::cout << "No valid bid/ask data, skipping order placement.\n";
-            return;
+        double last_price = last_market_data_.value()->last_price_traded;
+        bool should_place_order = false;
+    
+        // Relaxed conditions: trade if EITHER OBV Delta OR VWAP signal
+        if (trader_side_ == Order::Side::BID) 
+        {
+            // Buy conditions: delta_obv > threshold OR last price below VWAP
+            if (delta_obv > (0.5 * threshold_) || last_price < rolling_vwap) 
+            {
+                should_place_order = true;
+            }
+        }
+        else if (trader_side_ == Order::Side::ASK) 
+        {
+            // Sell conditions: delta_obv < -threshold OR last price above VWAP
+            if (delta_obv < (-0.5 * threshold_) || last_price > rolling_vwap) 
+            {
+                should_place_order = true;
+            }
         }
 
-        double price = getQuotePrice(delta_obv, rolling_vwap, best_bid, best_ask, trader_side_);
-        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-    }
+        if (should_place_order) 
+        {
+            double price = getQuotePrice(delta_obv, rolling_vwap, best_bid, best_ask, trader_side_);
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | OBV Delta: " << delta_obv << " | VWAP: " << rolling_vwap << "\n";
+        }
+        else
+        {
+            std::cout << "Trade conditions NOT met. No order placed.\n" << "OBV Delta: " << delta_obv << " | Last Price: " << last_price << " | VWAP: " << rolling_vwap << "\n";
+        }
+    } 
     
 
     double getQuotePrice(double delta_obv, double rolling_vwap, double best_bid, double best_ask, Order::Side trader_side_)
     {
         double price;
-        double slippage = getRandom(-1, 1);
 
         if (trader_side_ == Order::Side::BID)
         {
-            if (delta_obv > threshold_ && rolling_vwap < best_bid)
-            {
-                price = best_bid + 1 + slippage;
-            }
-            else
-            {
-                price = best_bid + slippage;
-            }
+            // Lifting the ask
+            price = best_ask; 
             return std::min(price, limit_price_);
         }
         else
         {
-            if (delta_obv < -threshold_ && rolling_vwap > best_ask)
-            {
-                price = best_ask - 1 + slippage;
-            }
-            else
-            {
-                price = best_ask + slippage;
-            }
+            // Hitting the bid
+            price = best_bid; 
             return std::max(price, limit_price_);
         }
     }
+
 
     double calculateVWAP(const std::vector<std::pair<double, double>>& data)
     {
@@ -357,6 +380,7 @@ private:
     constexpr static unsigned long MS_TO_NS = 1000000;
     std::optional<MarketDataPtr> last_market_data_;
     unsigned long next_trade_timestamp_;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
 };
 
 #endif

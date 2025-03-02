@@ -50,7 +50,6 @@ public:
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
-        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
@@ -59,8 +58,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
 
@@ -97,6 +98,24 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[RSIBB] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function, don’t call base handler
+        }
+
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
 private:
 
     double getRandom(double lower, double upper)
@@ -121,41 +140,27 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (timeNow() >= next_trade_timestamp_)
-                {   
-                    double rsi = 50.0;  // Default neutral RSI
-                    if (rsi_prices_.size() >= lookback_rsi_) 
-                    { 
-                        rsi = calculateRSI(rsi_prices_);
-                    }
+                if (rsi_prices_.size() >= lookback_rsi_ && bb_prices_.size() >= lookback_bb_) 
+                { 
+                    double rsi = calculateRSI(rsi_prices_); 
+                    double sma = calculateSMA(bb_prices_);
+                    double std_dev = calculateStandardDeviation(bb_prices_, sma);
+                    double upper_band = sma + (std_dev_multiplier_ * std_dev);
+                    double lower_band = sma - (std_dev_multiplier_ * std_dev);
+                    placeOrder(rsi, upper_band, lower_band);
 
-                    else 
-                    { 
-                        std::cout << "Not enough data for RSI calculation. Using default RSI: 50.0\n";
-                    }
-
-                    if (!bb_prices_.empty())
-                    {
-                        double sma = calculateSMA(bb_prices_);
-                        double std_dev = calculateStandardDeviation(bb_prices_, sma);
-                        double upper_band = sma + (std_dev_multiplier_ * std_dev);
-                        double lower_band = sma - (std_dev_multiplier_ * std_dev);
-
-                        if (!rsi_prices_.empty())
-                        {
-                            placeOrder(rsi, upper_band, lower_band);
-                        }
-                        else
-                        {
-                            std::cout << "Not enough data to place an order.\n";
-                        }
-                    }
-                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
                 }
+
+                else 
+                { 
+                    std::cout << "Not enough data for RSI calculation. Using default RSI: 50.0\n";
+                } 
+
                 sleep();
                 lock.lock();
             }
             lock.unlock();
+            std::cout << "Finished actively trading.\n";
         });
     }
 
@@ -194,7 +199,7 @@ private:
     void placeOrder(double rsi, double upper_band, double lower_band)
     {
 
-        if (!last_market_data_.has_value() || last_market_data_.value()->best_bid <= 0 || last_market_data_.value()->best_ask <= 0)
+        if (!last_market_data_.has_value())
         {
             std::cout << "No valid bid/ask data, skipping order placement.\n";
             return;
@@ -206,58 +211,64 @@ private:
             last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
         }
 
-        int quantity = 100; 
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.top(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = cust_order->price;
+            trader_side_ = cust_order->side;
+        }
+
+        std::uniform_int_distribution<int> dist(10, 50);  
+        int quantity = dist(random_generator_);
         double last_price = last_market_data_.value()->last_price_traded;
         double best_bid = last_market_data_.value()->best_bid;
         double best_ask = last_market_data_.value()->best_ask;
+        bool should_place_order = false;
 
-        // Ensure BOTH RSI and Bollinger Band conditions are met before placing a trade
-        if (trader_side_ == Order::Side::BID && rsi < 30 && last_price < lower_band)
+        // Relaxed conditions: trade if EITHER RSI or Bollinger Bands signal
+        if (trader_side_ == Order::Side::BID) 
         {
-            std::cout << "RSI < 30 AND price below lower Bollinger Band -> Placing BID order\n";
-            double price = getQuotePrice(rsi, upper_band, lower_band, best_bid, best_ask, trader_side_);
-            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            // Buy conditions: RSI < 30 OR price below lower band
+            if (rsi < 30 || last_price < lower_band) 
+            {
+                should_place_order = true;
+            }
         }
-        else if (trader_side_ == Order::Side::ASK && rsi > 70 && last_price > upper_band)
+        else if (trader_side_ == Order::Side::ASK) 
         {
-            std::cout << "RSI > 70 AND price above upper Bollinger Band -> Placing ASK order\n";
+            // Sell conditions: RSI > 70 OR price above upper band
+            if (rsi > 70 || last_price > upper_band) 
+            {
+                should_place_order = true;
+            }
+        }
+        
+        if (should_place_order) 
+        {
             double price = getQuotePrice(rsi, upper_band, lower_band, best_bid, best_ask, trader_side_);
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | RSI: " << rsi << " | BB Range: [" << lower_band << ", " << upper_band << "]\n";
         }
         else
         {
-            std::cout << "Trade conditions NOT met. No order placed.\n";
+            std::cout << "Trade conditions NOT met. No order placed.\n" << "RSI: " << rsi << " | Last Price: " << last_price << " | BB Range: [" << lower_band << ", " << upper_band << "]\n";
         }
     }
 
     double getQuotePrice(double rsi, double upper_band, double lower_band, double best_bid, double best_ask, Order::Side trader_side_)
     {
         double price;
-        double slippage = getRandom(-1, 1);
-
         if (trader_side_ == Order::Side::BID)
         {
-            if (rsi < 30 &&  best_bid < lower_band)
-            {
-                price = best_bid + 1 + slippage;
-            }
-            else
-            {
-                price = best_bid + slippage;
-            }
+            // Prioritise lifting the ask
+            price = best_ask; 
             return std::min(price, limit_price_);
         }
-
         else
         {
-            if (rsi > 70 && best_ask > upper_band)
-            {
-                price = best_ask - 1 + slippage;
-            }
-            else
-            {
-                price = best_ask + slippage;
-            }
+            // Prioritise hitting the bid
+            price = best_bid; 
             return std::max(price, limit_price_);
         }
     }
@@ -357,6 +368,7 @@ private:
     std::optional<MarketDataPtr> last_market_data_;
     constexpr static double REL_JITTER = 0.25;
     constexpr static unsigned long MS_TO_NS = 1000000;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
 
 };
 

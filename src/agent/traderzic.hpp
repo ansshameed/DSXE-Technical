@@ -186,10 +186,10 @@ private:
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = std::clamp(cust_order->price, MIN_PRICE, MAX_PRICE);
-            trader_side_ = cust_order->side;
         }
 
-        int quantity = 100;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
         double price = getRandomPrice();
         placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
 
@@ -215,7 +215,7 @@ private:
     std::string ticker_;
     Order::Side trader_side_;
     double limit_price_;
-    unsigned int trade_interval_ms_;
+    unsigned int trade_interval_ms_; 
     bool cancelling_;
 
     std::optional<int> last_accepted_order_id_ = std::nullopt;

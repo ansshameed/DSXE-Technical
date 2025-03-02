@@ -37,16 +37,18 @@ public:
     int resting_order_id;
     double buyer_priv_value;
     double seller_priv_value;
+    double buyer_profit; 
+    double seller_profit; 
 
 
     std::string describeCSVHeaders() const override
     {
-        return "id,ticker,quantity,price,timestamp,buyer_id,seller_id,buyer_name,seller_name,aggressing_order_id,resting_order_id,buyer_priv_value,seller_priv_value";
+        return "id,ticker,quantity,price,timestamp,buyer_id,seller_id,buyer_name,seller_name,aggressing_order_id,resting_order_id,buyer_priv_value,seller_priv_value,buyer_profit,seller_profit"; 
     }
 
     std::string toCSV() const override
     {
-        return std::to_string(id) + "," + ticker + "," + std::to_string(quantity) + "," + std::to_string(price) + "," + std::to_string(timestamp) + "," + std::to_string(buyer_id) + "," + std::to_string(seller_id) + "," + buyer_name + "," + seller_name + "," + std::to_string(aggressing_order_id) + "," + std::to_string(resting_order_id) + "," + std::to_string(buyer_priv_value) + "," + std::to_string(seller_priv_value);
+        return std::to_string(id) + "," + ticker + "," + std::to_string(quantity) + "," + std::to_string(price) + "," + std::to_string(timestamp) + "," + std::to_string(buyer_id) + "," + std::to_string(seller_id) + "," + buyer_name + "," + seller_name + "," + std::to_string(aggressing_order_id) + "," + std::to_string(resting_order_id) + "," + std::to_string(buyer_priv_value) + "," + std::to_string(seller_priv_value) + "," + std::to_string(buyer_profit) + "," + std::to_string(seller_profit);
     }
 
 private:
@@ -69,6 +71,8 @@ private:
         ar & resting_order_id;
         ar & buyer_priv_value;
         ar & seller_priv_value;
+        ar & buyer_profit;
+        ar & seller_profit;
     }
 
     friend std::ostream& operator<<(std::ostream& os, const Trade& trade)

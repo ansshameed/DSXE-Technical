@@ -385,6 +385,14 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
     // Update last trade timestamp
     last_trade_time_[resting_order->ticker] = now; 
 
+    if (aggressing_order->side == Order::Side::BID) { // Buyer = aggressor, Seller = resting order
+        trade->buyer_profit = (trade->buyer_priv_value - trade->price); 
+        trade->seller_profit = (trade->price - trade->seller_priv_value); 
+    } else {
+        trade->buyer_profit = (trade->buyer_priv_value - trade->price); 
+        trade->seller_profit = (trade->price - trade->seller_priv_value);
+    }
+
     // Decrement the quantity of the orders by quantity traded
     getOrderBookFor(resting_order->ticker)->updateOrderWithTrade(resting_order, trade);
     getOrderBookFor(resting_order->ticker)->updateOrderWithTrade(aggressing_order, trade);

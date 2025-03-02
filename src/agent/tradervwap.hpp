@@ -5,6 +5,7 @@
 #include <numeric>
 #include <stack> 
 #include <algorithm>
+#include <random> 
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
 
@@ -57,8 +58,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -165,50 +168,53 @@ private:
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
-            trader_side_ = cust_order->side;
         }
 
         double best_bid = last_market_data_.value()->best_bid;
         double best_ask = last_market_data_.value()->best_ask;
-        double rounded_vwap = std::round(vwap_price);
+        double last_price_traded = last_market_data_.value()->last_price_traded;
+        std::uniform_int_distribution<int> dist(10, 50);  // Generates integers between 0 and 100
+        int quantity = dist(random_generator_);
 
-        int quantity = 100; 
-        double price = getQuotePrice(rounded_vwap, best_bid, best_ask, trader_side_);
-        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
-                << " " << quantity << " @ " << price 
-                << " (VWAP: " << rounded_vwap << " | Best Bid: " << best_bid 
-                << " | Best Ask: " << best_ask << ")\n";
+        bool should_place_order = false; 
+        if (trader_side_ == Order::Side::BID && last_price_traded < (vwap_price)) // MAYBE CHANGE SO NOT SO RESTRICTIVE 
+        {
+            should_place_order = true; 
+        }
+        else if (trader_side_ == Order::Side::ASK && last_price_traded > (vwap_price))
+        {
+            should_place_order = true; 
+        }
+
+        if (should_place_order) 
+        { 
+            double price = getQuotePrice(vwap_price, best_bid, best_ask, trader_side_);
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | VWAP: " << vwap_price << " | Last Price: " << last_price_traded << "\n";
+        }
+        else 
+        { 
+            std::cout << "Trade conditions NOT met. No order placed.\n";
+        }
     }
 
     double getQuotePrice(double rounded_vwap, double best_bid, double best_ask, Order::Side trader_side_)
     {
-        double price; 
-        double slippage = std::round(getRandom(-1, 1)); // Small variation in price
-
+        double candidate_price = 0.0;
+        double slippage = std::round(getRandom(-1, 1)); // Small variation in price (currently not applied)
+       
         if (trader_side_ == Order::Side::BID) 
         { 
-            if (rounded_vwap > best_ask) 
-            { 
-                return best_ask; 
-            }
-            else 
-            { 
-                return best_bid - 1; 
-            }
-        }
+            candidate_price = best_ask; // Immediately buy by lifting the ask
+            candidate_price = std::min(limit_price_, candidate_price); // Ensure price is not higher than the limit price
+        } 
 
         else 
         { 
-            if (rounded_vwap < best_bid) 
-            { 
-                return best_bid; 
-            }
-            else 
-            { 
-                return best_ask + 1; 
-            }
+            candidate_price = best_bid; // Immediately sell by hitting the bid
+            candidate_price = std::max(limit_price_, candidate_price); // Ensure price is not lower than the limit price
         }
+        return candidate_price; 
     }
 
     void reactToMarket(MarketDataMessagePtr msg)
@@ -263,7 +269,7 @@ private:
     Order::Side trader_side_;
     double limit_price_;
     bool cancelling_;
-    unsigned int trade_interval_ms_;
+    unsigned int trade_interval_ms_ = 500; 
     int lookback_;
     std::vector<std::pair<double, double>> price_volume_data_;
     std::optional<int> last_accepted_order_id_ = std::nullopt;

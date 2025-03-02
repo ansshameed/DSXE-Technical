@@ -18,23 +18,23 @@
         </watchers>
         <orderinjectors>
             <orderinjector 
-                exchange="NYSE" 
-                ticker="AAPL"
-                supply_min_low="140" 
-                supply_min_high="155" 
-                supply_max_low="155" 
-                supply_max_high="170"
-                demand_min_low="130" 
-                demand_min_high="145" 
-                demand_max_low="145" 
-                demand_max_high="160"
-                step_mode="jittered" 
-                time_mode="periodic"
-                use_input_file="true"
-                use_offset="true"
-                interval="1"
-                input_file="../IBM-310817.csv"
-            />
+            exchange="NYSE" 
+            ticker="AAPL"
+            supply_min_low="100" 
+            supply_min_high="120" 
+            supply_max_low="180" 
+            supply_max_high="200"
+            demand_min_low="100" 
+            demand_min_high="120" 
+            demand_max_low="180" 
+            demand_max_high="200"
+            step_mode="jittered" 
+            time_mode="periodic"
+            use_input_file="true"
+            use_offset="true"
+            interval="1"
+            input_file="../IBM-310817.csv"
+        />
         </orderinjectors>
     </agents>
 </simulation>

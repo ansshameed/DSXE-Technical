@@ -4,6 +4,7 @@
 #include <vector>
 #include <numeric>
 #include <algorithm>
+#include <stack> 
 #include "traderagent.hpp"
 
 class TraderBollingerBands : public TraderAgent
@@ -48,7 +49,6 @@ public:
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
-        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
@@ -60,7 +60,6 @@ public:
         is_trading_ = false;
         lock.unlock();
     }
-
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
@@ -95,6 +94,24 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     } 
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[Bollinger Bands] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function, don’t call base handler
+        }
+
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
 private:
 
     double getRandom(double lower, double upper)
@@ -119,23 +136,18 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-
-                if (timeNow() >= next_trade_timestamp_)
                 {
-                    if (!closing_prices_.empty()) 
+                    if (closing_prices_.size() >= lookback_period_)
                     {
                         double sma = calculateSMA(closing_prices_);
                         double std_dev = calculateStandardDeviation(closing_prices_, sma);
                         double upper_band = sma + (std_dev_multiplier_ * std_dev);
                         double lower_band = sma - (std_dev_multiplier_ * std_dev);
-
-                        double last_price = closing_prices_.back();
-                        std::cout << "Calculated Bollinger Bands: Upper: " << upper_band << " | Lower: " << lower_band << " | Last Price: " << last_price << "\n";
-
-                        placeOrder(last_price, upper_band, lower_band);
+                        std::cout << "Calculated Bollinger Bands: Upper: " << upper_band << " | Lower: " << lower_band << "\n";
+                        placeOrder(upper_band, lower_band);
                     }
-                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
                 }
+
                 sleep();
                 lock.lock();
             }
@@ -144,7 +156,7 @@ private:
         });
     }
 
-    void placeOrder(double last_price, double upper_band, double lower_band)
+    void placeOrder(double upper_band, double lower_band)
     {
         if (cancelling_ && last_accepted_order_id_.has_value()) // If cancelling is enabled and there is an accepted order (checks if there is previously placed order that has been accepted )
         {
@@ -157,49 +169,60 @@ private:
             return;
         }
 
-        //int quantity = getRandomOrderSize(); // Get random order size
-        int quantity = 100; 
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.top(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = cust_order->price;
+            //trader_side_ = cust_order->side;
+        }
         
         double best_bid = last_market_data_.value()->best_bid;
         double best_ask = last_market_data_.value()->best_ask;
+        double last_price = last_market_data_.value()->last_price_traded;
         double price = getQuotePrice(last_price, upper_band, lower_band, best_bid, best_ask); // Get quote price based on side
+        std::uniform_int_distribution<int> dist(10, 50);  // Generates integers between 0 and 100
+        int quantity = dist(random_generator_);
 
-
-        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-
-        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | Last Price: " << last_price << " | Upper Band: " << upper_band << " | Lower Band: " << lower_band << "\n";
+        bool should_place_order = false; 
+        
+        if (trader_side_ == Order::Side::BID && last_price < lower_band) // MAYBE CHANGE SO NOT SO RESTRICTIVE 
+        {
+           should_place_order = true; 
+        }
+        else if (trader_side_ == Order::Side::ASK && last_price > upper_band)
+        {
+            should_place_order = true;
+        }
+        
+        if (should_place_order) 
+        { 
+            double price = getQuotePrice(last_price, upper_band, lower_band, best_bid, best_ask); // Get quote price based on side
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | Upper Band: " << upper_band << " | Lower Band: " << lower_band << "\n";
+        }
+        else 
+        { 
+            std::cout << "Trade conditions NOT met. No order placed.\n";
+        }
     } 
 
     double getQuotePrice(double last_price, double upper_band, double lower_band, double best_bid, double best_ask)
     {   
-        double price; 
-        double slippage = std::round(getRandom(-1, 1)); 
+       double candidate_price = 0.0; 
+       
+       if (trader_side_ == Order::Side::BID)
+       {
+          candidate_price = best_ask; // Immediately buy by lifting the ask 
+          candidate_price = std::min(limit_price_, candidate_price); // Ensure price is not higher than the limit price
+       } 
+       else 
+       { 
+            candidate_price = best_bid; // Immediately sell by hitting the bid
+            candidate_price = std::max(limit_price_, candidate_price); // Ensure price is not lower than the limit price
+       }
 
-        if (trader_side_ == Order::Side::BID)
-        {
-            if (last_price < lower_band)
-            {
-                price = best_bid + 1 + slippage;
-            }
-            else
-            {
-                price = best_bid + slippage;
-            }
-            return std::min(price, limit_price_);
-        }
-        
-        else
-        {
-            if (last_price > upper_band)
-            {
-                price = best_ask - 1 + slippage;
-            } 
-            else
-            {
-                price = best_ask + slippage;
-            }
-            return std::max(price, limit_price_);
-        }
+       return candidate_price;
     }
 
     void reactToMarket(MarketDataMessagePtr msg)
@@ -262,7 +285,7 @@ private:
     int lookback_period_;
     double std_dev_multiplier_;
     bool cancelling_;
-    unsigned int trade_interval_ms_;
+    unsigned int trade_interval_ms_ = 500; 
     std::vector<double> closing_prices_;
     std::optional<int> last_accepted_order_id_ = std::nullopt;
     std::mt19937 random_generator_;
@@ -273,6 +296,8 @@ private:
     constexpr static double REL_JITTER = 0.25;
     constexpr static unsigned long MS_TO_NS = 1000000;
     std::optional<MarketDataPtr> last_market_data_;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
+
 };
 
 #endif

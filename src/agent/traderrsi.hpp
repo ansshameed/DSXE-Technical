@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <numeric>
+#include <stack> 
 #include <algorithm>
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
@@ -52,7 +53,6 @@ public:
     {
         std::cout << "Trading window started.\n";
         is_trading_ = true;
-        next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
         activelyTrade();
     }
 
@@ -61,8 +61,10 @@ public:
         std::unique_lock<std::mutex> lock(mutex_);
         sendProfitToExchange();
         std::cout << "Trading window ended.\n";
-        is_trading_ = false;
+        // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        is_trading_ = false;
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -99,6 +101,24 @@ public:
         std::cout << "Received cancel reject from " << exchange << ": Order: " << msg->order_id;
     }
 
+    void handleBroadcastFrom(std::string_view sender, MessagePtr message) override
+    {
+        if (message->type == MessageType::CUSTOMER_ORDER) 
+        {
+            auto cust_msg = std::dynamic_pointer_cast<CustomerOrderMessage>(message);
+            if (cust_msg) 
+            { 
+                std::lock_guard<std::mutex> lock(mutex_);
+                customer_orders_.push(cust_msg); // Enqueue customer order
+                std::cout << "[RSI] Enqueued CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+            }
+            return; // Just exit the function, don’t call base handler
+        }
+
+        // If it's not a customer order, call the base class handler
+        TraderAgent::handleBroadcastFrom(sender, message);
+    }
+
 private:    
 
     double getRandom(double lower, double upper)
@@ -118,32 +138,37 @@ private:
     void activelyTrade()
     {
         trading_thread_ = new std::thread([&, this](){
-
             std::unique_lock<std::mutex> lock(mutex_);
             while (is_trading_)
             {
                 lock.unlock();
-
-                if (timeNow() >= next_trade_timestamp_) 
+                if (closing_prices_.size() >= lookback_)
                 { 
+                    double rsi = calculateRSI(closing_prices_);
+                    std::cout << "RSI: " << rsi << "\n";
 
-                    if (!closing_prices_.empty())
+                    double stoch_rsi = 50.0; // Neutral value.
+                    if (use_stoch_rsi_)
                     { 
-                        double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
-                        std::cout << "RSI: " << rsi << "\n";
-                        double stoch_rsi = use_stoch_rsi_ ? calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_) : 50.0; // Neutral stoch RSI if disabled (no overbought/oversold conditions)
-                        std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
-
-                        if (shouldTrade(rsi, stoch_rsi)) 
+                        if (rsi_values_.size() >= stoch_lookback_)
                         { 
-                            placeOrder(rsi, stoch_rsi);
+                            double stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_);
+                            std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
                         }
-                        
+                        else
+                        {
+                            std::cout << "Not enough RSI values for StochRSI calculation.\n";
+                            sleep();
+                            lock.lock();
+                            continue;
+                        }
                     }
-
-                    next_trade_timestamp_ = timeNow() + (trade_interval_ms_ * MS_TO_NS);
-                } 
-
+                    placeOrder(rsi, stoch_rsi); // Always call placeOrder 
+                }
+                else
+                {
+                    std::cout << "Not enough closing prices for RSI calculation.\n";
+                }
                 sleep();
                 lock.lock();
             }
@@ -163,33 +188,21 @@ private:
             closing_prices_.erase(closing_prices_.begin());
         }
 
-        if (use_stoch_rsi_) 
+        if (use_stoch_rsi_)
         { 
-            double rsi = calculateRSI(closing_prices_); //Calculates RSI based on closing prices
-            rsi_values_.push_back(rsi); // Add RSI value to buffer
-
-            if (rsi_values_.size() > stoch_lookback_) // If buffer exceeds lookback, remove the oldest price
+            if (closing_prices_.size() >= lookback_)
             {
-                rsi_values_.erase(rsi_values_.begin());
+                double rsi = calculateRSI(closing_prices_);
+                rsi_values_.push_back(rsi);
+                if (rsi_values_.size() > stoch_lookback_)
+                {
+                    rsi_values_.erase(rsi_values_.begin());
+                }
             }
         }
 
         last_market_data_ = msg->data; // Store last market data
     } 
-
-    bool shouldTrade(double rsi, double stoch_rsi) 
-    { 
-        if (use_stoch_rsi_) 
-        { 
-            return (trader_side_ == Order::Side::BID && stoch_rsi < 20) || (trader_side_ == Order::Side::ASK && stoch_rsi > 80);
-        }
-
-        else 
-        { 
-            return (trader_side_ == Order::Side::BID && rsi < 30) || (trader_side_ == Order::Side::ASK && rsi > 70);
-        }
-
-    }
 
     void placeOrder(double rsi, double stoch_rsi) //Places limit order on exchange 
     {
@@ -200,19 +213,45 @@ private:
             last_accepted_order_id_ = std::nullopt; //Clears last accepted order to null
         }
 
-        int quantity = 100; 
+        if (!customer_orders_.empty()) 
+        {   
+            auto cust_order = customer_orders_.top(); // Get next customer order
+            customer_orders_.pop();
+            limit_price_ = cust_order->price;
+            //trader_side_ = cust_order->side;
+        }
+
+        std::uniform_int_distribution<int> dist(10, 50);  // Generates integers between 0 and 100
+        int quantity = dist(random_generator_);
         double best_bid = last_market_data_.value()->best_bid; //Get best bid price from market data
         double best_ask = last_market_data_.value()->best_ask; //Get best ask price from market data
 
-        if (!last_market_data_.has_value() || best_bid <= 0 || best_ask <= 0) {
+        if (!last_market_data_.has_value()) {
             std::cout << "No valid bid/ask data, skipping order placement.\n";
             return;
         }
 
-        double price = getQuotePrice(rsi, stoch_rsi, best_bid, best_ask, trader_side_); 
-        placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+        bool should_place_order = false;
+        if (trader_side_ == Order::Side::BID && rsi < 30 && (!use_stoch_rsi_ || stoch_rsi < 20))
+        {
+            should_place_order = true;
+        }
+        else if (trader_side_ == Order::Side::ASK && rsi > 70 && (!use_stoch_rsi_ || stoch_rsi > 80))
+        {
+            should_place_order = true;
+        }
+        
+        if (should_place_order) 
+        { 
+            double price = getQuotePrice(rsi, stoch_rsi, best_bid, best_ask, trader_side_);
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
+            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | RSI: " << rsi << " | StochRSI: " << stoch_rsi << "\n";
+        }
+        else 
+        { 
+            std::cout << "Not placing order. RSI: " << rsi << " | StochRSI: " << stoch_rsi << "\n";
+        }
 
-        std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " (RSI: " << rsi << " | Best Bid: " << best_bid << " | Best Ask: " << best_ask << ")\n";
     }
 
     double getQuotePrice(double rsi, double stoch_rsi, double best_bid, double best_ask, Order::Side trader_side_) 
@@ -220,30 +259,20 @@ private:
         double price; 
         double slippage = getRandom(-1, 1); // Small variation in price
 
-        if (trader_side_ == Order::Side::BID)
-        {
-            if (rsi < 30 || stoch_rsi < 20)
-            {
-                price = best_bid + 1 + slippage;
-            }
-            else
-            {
-                price = best_bid + slippage;
-            }
-            return std::min(price, limit_price_);
+        if (trader_side_ == Order::Side::BID) 
+        { 
+            price = best_ask; 
+            price = std::min(limit_price_, price);
+        } 
+
+        else 
+        { 
+            price = best_bid; 
+            price = std::max(limit_price_, price);
         }
-        else
-        {
-            if (rsi > 70 || stoch_rsi > 80)
-            {
-                price = best_ask - 1 + slippage; 
-            } 
-            else
-            {
-                price = best_ask + slippage;
-            }
-            return std::max(price, limit_price_);
-        }
+
+        return price; 
+
     }
 
     void sleep()
@@ -377,6 +406,8 @@ private:
     constexpr static unsigned long MS_TO_NS = 1000000;
     unsigned long next_trade_timestamp_;
     std::optional<MarketDataPtr> last_market_data_;
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
+
 
 };
 
