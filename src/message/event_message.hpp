@@ -15,7 +15,8 @@ public:
         BREAK_END,
         ORDER_INJECTION_START, 
         ORDER_INJECTION_STOP,
-        TRADER_READY, 
+        TRADER_READY,
+        TECHNICAL_AGENTS_STARTED
     };
 
     EventMessage() : Message(MessageType::EVENT) {};

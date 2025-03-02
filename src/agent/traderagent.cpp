@@ -20,7 +20,7 @@ std::optional<MessagePtr> TraderAgent::handleMessageFrom(std::string_view sender
     std::unique_lock lock{mutex_};
     if (!trading_window_open_) return std::nullopt;
     lock.unlock();
-
+    
     switch (message->type)
     {
         case MessageType::EXECUTION_REPORT:
@@ -88,6 +88,13 @@ void TraderAgent::handleBroadcastFrom(std::string_view sender, MessagePtr messag
             else if (msg->event_type == EventMessage::EventType::TRADING_SESSION_END)
             {
                 onTradingEnd();
+            }
+            else if (msg->event_type == EventMessage::EventType::TECHNICAL_AGENTS_STARTED)
+            {
+                if (is_legacy_trader_)
+                {
+                    resetBalance();
+                }
             }
             break;
         }
@@ -170,6 +177,28 @@ void TraderAgent::addDelayedStart(int delay_in_seconds)
     start_delay_in_seconds_ = delay_in_seconds;
 }
 
+bool TraderAgent::isLegacyTrader() const
+{
+    return is_legacy_trader_;
+}
+
+bool TraderAgent::technical_agents_started_ = false; 
+
+void TraderAgent::resetBalance() 
+{
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (is_legacy_trader_ && !balance_reset_performed) 
+    {
+        std::cout << " Resetting balance due to technical agents starting" << std::endl;
+        balance = 0.0;
+        n_trades = 0;
+        blotter_.clear();
+        balance_reset_performed = true;
+
+        std::cout << " Balance reset to: " << balance << std::endl;
+    }
+}
+
 void TraderAgent::signalTradingStart()
 {
     delay_thread_ = new std::thread([&](){
@@ -180,6 +209,26 @@ void TraderAgent::signalTradingStart()
         }
 
         std::cout << "Trader starts now.\n";
+
+        if (!is_legacy_trader_ && start_delay_in_seconds_ == TECHNICAL_AGENT_DELAY_SECONDS) // When delay reached, signal to exchange
+        { 
+            // Create a special message for the exchange
+            EventMessagePtr msg = std::make_shared<EventMessage>();
+            msg->event_type = EventMessage::EventType::TECHNICAL_AGENTS_STARTED;
+            msg->agent_name = getAgentName();
+            
+            // Send to exchange
+            sendMessageTo(exchange_, std::dynamic_pointer_cast<Message>(msg));
+            
+            // Set the static flag
+            technical_agents_started_ = true;
+            std::cout << " Sending technical agents started message to exchange" << std::endl;
+        }
+        else if (is_legacy_trader_ && technical_agents_started_) // When technicals have started, reset balance of legacy trader.
+        { 
+            resetBalance(); 
+        }
+
         onTradingStart();
 
         std::unique_lock lock{mutex_};

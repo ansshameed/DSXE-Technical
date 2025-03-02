@@ -88,6 +88,9 @@ public:
     /** Adds the given subscriber to the market data subscribers list. */
     void addSubscriber(std::string_view ticker, int subscriber_id, std::string_view address);
 
+    /** Signal to technical indicator agents to start trading. */
+    void signalTechnicalAgentsStarted(); 
+
 private:
 
     /**

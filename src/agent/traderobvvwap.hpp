@@ -24,6 +24,10 @@ public:
       random_generator_{std::random_device{}()},
       mutex_{}
     {
+
+        // Mark as legacy agent
+        is_legacy_trader_ = false;
+        
         // Connect to exchange and subscribe to market data
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);

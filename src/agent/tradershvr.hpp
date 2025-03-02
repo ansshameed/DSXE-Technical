@@ -15,7 +15,11 @@ public:
       ticker_{config->ticker},
       trader_side_{config->side},
       limit_price_{config->limit}
-    {
+    {   
+        
+        // Mark as legacy agent
+        is_legacy_trader_ = true;
+        
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);

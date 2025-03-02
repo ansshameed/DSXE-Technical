@@ -26,6 +26,10 @@ public:
     TraderAgent(NetworkEntity *network_entity, AgentConfigPtr config)
     : Agent(network_entity, std::static_pointer_cast<AgentConfig>(config))
     {
+        if (auto trader_config = std::dynamic_pointer_cast<TraderConfig>(config))
+        {
+            exchange_ = trader_config->exchange_name;
+        }
     }
 
     /** Gracefully terminates the trader, freeing all memory. */
@@ -50,9 +54,15 @@ public:
     /** Returns a random price for the order. */
     int getRandomOrderSize();
 
-    std::string agent_name_; 
-    
+    /** Get agent name for display purposes. */
+    std::string agent_name_;
     virtual std::string getAgentName() const;
+
+    /** Check if agent is a legacy agent. */
+    bool isLegacyTrader() const;
+
+    /** Reset legacy agent's balance to 0 when steady state reached. */
+    void resetBalance(); 
 
 
 protected:
@@ -87,11 +97,23 @@ protected:
     unsigned int n_trades; 
     std::vector<TradePtr> blotter_; 
     double balance = 0.0; 
+    
+    /** Steady state for legacy vs technical trading agents. */
+    bool is_legacy_trader_ = false;
+    bool balance_reset_performed = false; // Whether balance reset has been performed 
+    static constexpr unsigned int TECHNICAL_AGENT_DELAY_SECONDS = 4; // 2 second delay for technical agents
+    static bool technical_agents_started_; // Static flag to track if technical agents have started
+
+    /** Name of exchange the trader is connecting to */
+    std::string exchange_; 
 
 private:
 
     /** Signals that trading has started and starts sending callbacks to handlers. */
     void signalTradingStart();
+
+    /** Broadcast message to inform agents that technical indicators have started trading. */
+    void broadcastTechnicalTradingStart();
 
     /** TODO: Signals that trading has ended and stops sending callbacks to handlers. */
     // void signalTradingEnd();

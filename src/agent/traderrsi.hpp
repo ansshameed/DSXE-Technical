@@ -28,6 +28,9 @@ public:
     {   
         use_stoch_rsi_ = false; 
 
+        // Mark as legacy agent
+        is_legacy_trader_ = false;
+
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);

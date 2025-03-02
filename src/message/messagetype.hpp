@@ -17,7 +17,8 @@ enum class MessageType : int
     TRADER_CONFIG, 
     CUSTOMER_ORDER, 
     TRADER_LIST_RESPONSE, 
-    REQUEST_TRADER_LIST
+    REQUEST_TRADER_LIST, 
+    TECHNICAL_AGENTS_STARTED, 
 };
 
 #endif

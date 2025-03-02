@@ -30,6 +30,9 @@ public:
     
     /** Configure ZIP based on CSV. */
     static AgentConfigPtr configureTraderZIPFromCSV(int id, const std::string& addr, const std::string& exchange, const std::string& ticker, AgentType trader_type, const std::string& side, const std::unordered_map<std::string, std::string>& exchange_addrs_map, const std::string& trader_string_name);
+
+    /** Technical agents delay. */
+    constexpr static unsigned int DEFAULT_TECHNICAL_AGENT_DELAY = 4; 
     
 private:
 

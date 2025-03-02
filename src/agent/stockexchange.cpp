@@ -449,6 +449,18 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
                       << " | Profit: " << std::fixed << std::setprecision(2) << profit_msg->profit << "\n"; // Print profits to terminal
             break;
         }
+        case MessageType::EVENT:
+        {
+            EventMessagePtr event_msg = std::dynamic_pointer_cast<EventMessage>(message);
+            if (event_msg && event_msg->event_type == EventMessage::EventType::TECHNICAL_AGENTS_STARTED) 
+            {
+                // When a technical agent signals that it's ready to trade,
+                // broadcast this to all traders
+                signalTechnicalAgentsStarted();
+                return std::nullopt;
+            }
+            // Fall through to default case for other event types
+        }
         default:
         {   
             // Send message to the matching engine
@@ -739,6 +751,18 @@ void StockExchange::endTradingSession()
     writeProfitsToCSV();
 };
 
+void StockExchange::signalTechnicalAgentsStarted()
+{
+    EventMessagePtr msg = std::make_shared<EventMessage>();
+    msg->event_type = EventMessage::EventType::TECHNICAL_AGENTS_STARTED;
+    
+    // Signal to all tickers
+    for (auto const& [ticker, ticker_subscribers] : subscribers_)
+    {
+        broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
+    }
+}
+
 void StockExchange::writeProfitsToCSV()
 {
     std::vector<std::pair<std::string, double>> sorted_profits(
@@ -755,8 +779,6 @@ void StockExchange::writeProfitsToCSV()
         writer->stop(); 
     }
 }
-
-
 
 OrderBookPtr StockExchange::getOrderBookFor(std::string_view ticker)
 {
