@@ -731,16 +731,18 @@ void StockExchange::endTradingSession()
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
 
-    // Wait until all expected profit messages have been received (or a timeout)
-    {
-        std::unique_lock<std::mutex> lock(profit_mutex_);
-        bool allReceived = profit_cv_.wait_for(lock, std::chrono::seconds(3), [this](){
-            return received_profit_traders_.size() >= expected_trader_count_;
-        });
-        if (!allReceived) {
-            std::cout << "Timed out waiting for some profit messages. Proceeding with available data.\n";
-        }
+    // Sleep to allow time for profit messages to be received
+    std::cout << "Waiting for profit messages...\n";
+    std::this_thread::sleep_for(std::chrono::seconds(20)); // TAKING A VERY LONG TIME TO PROCESS RECEIVED PROFITS???
+
+    // Print out received profits
+    std::cout << "Received Profits:\n";
+    for (const auto& [agentName, profit] : agent_profits_by_name_) {
+        std::cout << agentName << ": " << profit << std::endl;
     }
+
+    // Write profits to CSV
+    writeProfitsToCSV();
 
     msg_queue_.close();
     // Iterate through all tickers and close all open csv files
@@ -748,8 +750,44 @@ void StockExchange::endTradingSession()
     {
         writer->stop();
     }
-    writeProfitsToCSV();
-};
+}
+
+void StockExchange::writeProfitsToCSV()
+{
+    // Ensure we have profits to write
+    if (agent_profits_by_name_.empty()) {
+        std::cout << "ERROR: No profits to write to CSV!\n";
+        return;
+    }
+
+    // Sort profits in descending order
+    std::vector<std::pair<std::string, double>> sorted_profits(
+        agent_profits_by_name_.begin(), agent_profits_by_name_.end());
+
+    std::sort(sorted_profits.begin(), sorted_profits.end(), 
+        [](const auto& a, const auto& b) { return a.second > b.second; }); 
+    
+    // Write to each ticker's profit file
+    for (const auto& [ticker, writer] : profits_writer_) {
+        std::cout << "Writing profits for ticker: " << ticker << "\n";
+        
+        for (const auto& [agentName, profit] : sorted_profits) {
+            ProfitSnapshotPtr snapshot = std::make_shared<ProfitSnapshot>(agentName, profit);
+            
+            if (!writer) {
+                std::cerr << "ERROR: Null writer for ticker " << ticker << "\n";
+                continue;
+            }
+            
+            writer->writeRow(snapshot);
+            std::cout << "Wrote profit for " << agentName << ": " << profit << "\n";
+        }
+        
+        writer->stop();
+    }
+
+    std::cout << "Finished writing profits to CSV\n";
+}
 
 void StockExchange::signalTechnicalAgentsStarted()
 {
@@ -760,23 +798,6 @@ void StockExchange::signalTechnicalAgentsStarted()
     for (auto const& [ticker, ticker_subscribers] : subscribers_)
     {
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
-    }
-}
-
-void StockExchange::writeProfitsToCSV()
-{
-    std::vector<std::pair<std::string, double>> sorted_profits(
-        agent_profits_by_name_.begin(), agent_profits_by_name_.end()); // Copy aggregated profits to vector
-
-        std::sort(sorted_profits.begin(), sorted_profits.end(), [](const auto& a, const auto& b) { return a.second > b.second; }); 
-    
-    // Write each profit snapshot row to the CSV file
-    for (const auto& [ticker, writer] : profits_writer_) { // Iterate through all profit writers
-        for (const auto& [agentName, profit] : sorted_profits) { // Iterate through all profits
-            ProfitSnapshotPtr snapshot = std::make_shared<ProfitSnapshot>(agentName, profit); // Create a profit snapshot
-            writer->writeRow(snapshot); // Write the profit snapshot to the profits file
-        }
-        writer->stop(); 
     }
 }
 
