@@ -96,6 +96,7 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
     //} 
 
     // Traders - CSV VERSION for dynamic allocation from markets.csv
+    //std::string csv_filepath = "../build/temp_config.csv"; // Default path for markets.csv
     std::string csv_filepath = "../markets.csv"; // Default path for markets.csv
     // Use a command-line argument if provided
     if (filepath.find(".csv") != std::string::npos) { // Check if the filepath is a CSV file

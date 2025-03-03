@@ -61,10 +61,6 @@ public:
     /** Check if agent is a legacy agent. */
     bool isLegacyTrader() const;
 
-    /** Reset legacy agent's balance to 0 when steady state reached. */
-    void resetBalance(); 
-
-
 protected:
 
     /** Derived classes must implement these: */

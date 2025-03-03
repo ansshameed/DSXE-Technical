@@ -89,15 +89,7 @@ void TraderAgent::handleBroadcastFrom(std::string_view sender, MessagePtr messag
             {
                 onTradingEnd();
             }
-            else if (msg->event_type == EventMessage::EventType::TECHNICAL_AGENTS_STARTED)
-            {
-                if (is_legacy_trader_)
-                {
-                    resetBalance();
-                }
-            }
-            break;
-        }
+        } 
         default:
         {
             std::cout << "Unknown message type" << "\n";
@@ -184,21 +176,6 @@ bool TraderAgent::isLegacyTrader() const
 
 bool TraderAgent::technical_agents_started_ = false; 
 
-void TraderAgent::resetBalance() 
-{
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (is_legacy_trader_ && !balance_reset_performed) 
-    {
-        std::cout << " Resetting balance due to technical agents starting" << std::endl;
-        balance = 0.0;
-        n_trades = 0;
-        blotter_.clear();
-        balance_reset_performed = true;
-
-        std::cout << " Balance reset to: " << balance << std::endl;
-    }
-}
-
 void TraderAgent::signalTradingStart()
 {
     delay_thread_ = new std::thread([&](){
@@ -224,11 +201,6 @@ void TraderAgent::signalTradingStart()
             technical_agents_started_ = true;
             std::cout << " Sending technical agents started message to exchange" << std::endl;
         }
-        else if (is_legacy_trader_ && technical_agents_started_) // When technicals have started, reset balance of legacy trader.
-        { 
-            resetBalance(); 
-        }
-
         onTradingStart();
 
         std::unique_lock lock{mutex_};
@@ -237,7 +209,7 @@ void TraderAgent::signalTradingStart()
     });
 }
 
-/** Blotter to track individual trader profits. */
+/** Blotter to track individual trader profits - INTERNAL TRACKING TURNT OFF AS STOCK EXCHANGE HANDLES THIS NOW. */
 void TraderAgent::bookkeepTrade(const TradePtr & trade, const LimitOrderPtr & order) { 
     
     //double current_time - IF WE WANT TO RECORD PROFIT PER TIME - LOOK BELOW. PUT IN DECLARATION ABOVE IF TIME NEEDED

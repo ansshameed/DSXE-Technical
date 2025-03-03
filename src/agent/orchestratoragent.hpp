@@ -50,7 +50,7 @@ public:
                 if (i == 0) // Only initialise the injector on the first iteration so it injects constantly in rest of simulation. 
                 { 
 
-                    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for exchanges to launch
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait for exchanges to launch
 
                     for (auto injector_config : simulation->injectors())
                     {
@@ -64,15 +64,14 @@ public:
                 }
 
                 // Allow injector to initialise first
-                std::this_thread::sleep_for(std::chrono::seconds(5));
+                std::this_thread::sleep_for(std::chrono::seconds(2));
 
                 // Initialise traders
                 for (auto trader_config : simulation->traders())
                 {   
                     trader_addresses_.push_back(trader_config->addr);
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
                     launchTraderProcess(trader_config->addr, to_string(trader_config->type));
-                    std::this_thread::sleep_for(std::chrono::seconds(2)); // Wait for traders to launch
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait for traders to launch
                     configureNode(trader_config);
                 }
 
@@ -99,7 +98,7 @@ public:
                 }
 
                 // Allow injection to send customer orders before trading. 
-                std::this_thread::sleep_for(std::chrono::seconds(8));
+                std::this_thread::sleep_for(std::chrono::seconds(5));
 
                 // Wait for this trial to finish before starting the next one
                 std::cout << "Simulation " << i << " configured." << std::endl;

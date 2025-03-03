@@ -26,7 +26,7 @@ public:
     {
         // Mark as legacy agent
         is_legacy_trader_ = false;
-        
+
         // Automatically connect to exchange on initialisation
         connect(config->exchange_addr, config->exchange_name, [=, this](){
             subscribeToMarket(config->exchange_name, config->ticker);
@@ -58,7 +58,7 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        sendProfitToExchange();
+        //sendProfitToExchange();
         std::cout << "Trading window ended.\n";
         is_trading_ = false;
         lock.unlock();

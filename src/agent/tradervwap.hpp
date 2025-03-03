@@ -59,11 +59,10 @@ public:
     void onTradingEnd() override
     {
         std::unique_lock<std::mutex> lock(mutex_);
-        sendProfitToExchange();
+        //sendProfitToExchange();
         std::cout << "Trading window ended.\n";
         // Delay shutdown to allow profit message to be sent completely.
         lock.unlock();
-        std::this_thread::sleep_for(std::chrono::seconds(2));
         is_trading_ = false;
     }
 

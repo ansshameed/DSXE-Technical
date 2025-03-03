@@ -385,6 +385,7 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
     // Update last trade timestamp
     last_trade_time_[resting_order->ticker] = now; 
 
+    // Calculate trade profits
     if (aggressing_order->side == Order::Side::BID) { // Buyer = aggressor, Seller = resting order
         trade->buyer_profit = (trade->buyer_priv_value - trade->price); 
         trade->seller_profit = (trade->price - trade->seller_priv_value); 
@@ -392,6 +393,47 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
         trade->buyer_profit = (trade->buyer_priv_value - trade->price); 
         trade->seller_profit = (trade->price - trade->seller_priv_value);
     }
+
+    // Calculate profits using the exact same logic as in bookkeepTrade
+    double resting_profit = 0.0;
+    double aggressing_profit = 0.0;
+
+    // Cast aggressing_order to LimitOrder if needed for priv_value access
+    LimitOrderPtr aggressing_limit_order = std::dynamic_pointer_cast<LimitOrder>(aggressing_order);
+    
+    // Calculate resting order profit
+    if (resting_order->side == Order::Side::BID) {
+        resting_profit = (resting_order->priv_value - trade->price);
+    } else {
+        resting_profit = (trade->price - resting_order->priv_value);
+    }
+    
+    // Calculate aggressing order profit
+    if (aggressing_order->side == Order::Side::BID) {
+        if (aggressing_limit_order) {
+            aggressing_profit = (aggressing_limit_order->priv_value - trade->price);
+        } else {
+            // For market orders, we use trade->buyer_priv_value as it may not have priv_value directly
+            aggressing_profit = (trade->buyer_priv_value - trade->price);
+        }
+    } 
+    else 
+    {
+        if (aggressing_limit_order) {
+            aggressing_profit = (trade->price - aggressing_limit_order->priv_value);
+        } else {
+            // For market orders, we use trade->seller_priv_value
+            aggressing_profit = (trade->price - trade->seller_priv_value);
+        }
+    }
+    
+    // Update profit tracking directly in the exchange
+    std::string resting_name = agent_names_[resting_order->sender_id];
+    std::string aggressing_name = agent_names_[aggressing_order->sender_id];
+    
+    // Update profits by trader name
+    agent_profits_by_name_[resting_name] += resting_profit;
+    agent_profits_by_name_[aggressing_name] += aggressing_profit;
 
     // Decrement the quantity of the orders by quantity traded
     getOrderBookFor(resting_order->ticker)->updateOrderWithTrade(resting_order, trade);
@@ -431,22 +473,6 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
                 throw std::runtime_error("Failed to cast message to SubscribeMessage");
             }
             onSubscribe(msg);
-            break;
-        }
-        case MessageType::PROFIT: // Handling ProfitMessage
-        {
-            ProfitMessagePtr profit_msg = std::dynamic_pointer_cast<ProfitMessage>(message);
-            if (profit_msg == nullptr) {
-                throw std::runtime_error("Failed to cast message to ProfitMessage");
-            }
-
-            // Store the profit by trader name
-            agent_profits_by_name_[profit_msg->agent_name] += profit_msg->profit; // Store profits by agent name
-
-            received_profit_traders_.insert(profit_msg->sender_id);
-
-            std::cout << "Received profit message from " << profit_msg->agent_name
-                      << " | Profit: " << std::fixed << std::setprecision(2) << profit_msg->profit << "\n"; // Print profits to terminal
             break;
         }
         case MessageType::EVENT:
@@ -700,6 +726,31 @@ void StockExchange::startTradingSession()
 {   
     trading_session_start_time_ = std::chrono::high_resolution_clock::now();
 
+    // Schedule the technical traders ready event
+    auto ready_thread = new std::thread([this]() {
+        std::this_thread::sleep_for(std::chrono::seconds(TECHNICAL_READY_DELAY_SECONDS));
+        
+        // Set technical traders as ready and reset legacy trader profits
+        technical_traders_ready_ = true;
+        ready_timestamp_ = std::chrono::high_resolution_clock::now();
+        
+        // Reset profits for legacy traders
+        int reset_count = 0;
+        for (auto& [name, profit] : agent_profits_by_name_) {
+            for (const auto& legacy_type : legacy_trader_types_) {
+                if (name.find(legacy_type) == 0) {  // Name starts with legacy type
+                    profit = 0.0;  // Reset profit
+                    reset_count++;
+                    break;
+                }
+            }
+        }
+        
+        // Signal all traders that technical agents are ready
+        signalTechnicalAgentsStarted();
+    });
+    ready_thread->detach();
+
     // Signal start of trading window to the matching engine
     std::unique_lock<std::mutex> trading_window_lock(trading_window_mutex_);
     trading_window_open_ = true;
@@ -707,13 +758,11 @@ void StockExchange::startTradingSession()
     trading_window_cv_.notify_all();
 
     EventMessagePtr msg = std::make_shared<EventMessage>(EventMessage::EventType::TRADING_SESSION_START); 
-
     // Send a message to subscribers of all tickers
     for (auto const& [ticker, ticker_subscribers] : subscribers_)
     {
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
-
 };
 
 void StockExchange::endTradingSession()
@@ -724,6 +773,16 @@ void StockExchange::endTradingSession()
     trading_window_lock.unlock();
     trading_window_cv_.notify_all();
 
+    // First close the message queue to prevent new trades
+    msg_queue_.close();
+    
+    // Wait for the matching engine to stop
+    if (matching_engine_thread_ != nullptr && matching_engine_thread_->joinable()) {
+        matching_engine_thread_->join();
+        delete matching_engine_thread_;
+        matching_engine_thread_ = nullptr;
+    }
+
     EventMessagePtr msg = std::make_shared<EventMessage>(EventMessage::EventType::TRADING_SESSION_END);
     // Send a message to subscribers of all tickers
     for (auto const& [ticker, ticker_subscribers] : subscribers_)
@@ -731,12 +790,8 @@ void StockExchange::endTradingSession()
         broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
     }
 
-    // Sleep to allow time for profit messages to be received
-    std::cout << "Waiting for profit messages...\n";
-    std::this_thread::sleep_for(std::chrono::seconds(20)); // TAKING A VERY LONG TIME TO PROCESS RECEIVED PROFITS???
-
-    // Print out received profits
-    std::cout << "Received Profits:\n";
+    // Now calculate profits and write to CSV
+    std::cout << "Profits calculated internally by exchange:\n";
     for (const auto& [agentName, profit] : agent_profits_by_name_) {
         std::cout << agentName << ": " << profit << std::endl;
     }
@@ -744,7 +799,6 @@ void StockExchange::endTradingSession()
     // Write profits to CSV
     writeProfitsToCSV();
 
-    msg_queue_.close();
     // Iterate through all tickers and close all open csv files
     for (auto const& [ticker, writer] : trade_tapes_)
     {

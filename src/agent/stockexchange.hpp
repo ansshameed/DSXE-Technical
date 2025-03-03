@@ -242,6 +242,11 @@ private:
     std::condition_variable profit_cv_;
     size_t expected_trader_count_ = 0; 
 
+    /** Legacy vs Technical agents. */
+    bool technical_traders_ready_ = false; 
+    std::unordered_set<std::string> legacy_trader_types_ = {"ZIC", "ZIP", "SHVR"};
+    std::chrono::time_point<std::chrono::high_resolution_clock> ready_timestamp_;
+    const int TECHNICAL_READY_DELAY_SECONDS = 4; 
 
     /** Simulation config params. */
     SimulationConfigPtr simulation_config_;
