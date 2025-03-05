@@ -28,8 +28,26 @@ add_executable(simulation src/main.cpp
                           src/config/configreader.cpp
                           src/pugi/pugixml.cpp)
 
+add_executable(generate_configs scripts/generate_configs.cpp)
+
 if(Boost_FOUND)
 
     target_link_libraries(simulation ${Boost_LIBRARIES})
 
 endif()
+
+configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_configs.cpp ${CMAKE_BINARY_DIR}/generate_configs.cpp COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/run_simulations.sh ${CMAKE_BINARY_DIR}/run_simulations.sh COPYONLY)
+
+add_custom_command(
+    TARGET simulation POST_BUILD
+    COMMAND chmod +x ${CMAKE_BINARY_DIR}/run_simulations.sh
+)
+
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/lob_snapshots)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/trades)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/market_data)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/profits)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/messages)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/logs)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/logs/traders)

@@ -228,19 +228,19 @@ private:
         double best_ask = last_market_data_.value()->best_ask;
         bool should_place_order = false;
 
-        // Relaxed conditions: trade if EITHER RSI or Bollinger Bands signal
+        // Relaxed conditions: trade if EITHER RSI or Bollinger Bands signal or make it restrictive with ANS
         if (trader_side_ == Order::Side::BID) 
         {
             // Buy conditions: RSI < 30 OR price below lower band
-            if (rsi < 30 || last_price < lower_band) 
+            if (rsi < 30 && last_price < lower_band) 
             {
                 should_place_order = true;
             }
         }
         else if (trader_side_ == Order::Side::ASK) 
         {
-            // Sell conditions: RSI > 70 OR price above upper band
-            if (rsi > 70 || last_price > upper_band) 
+            // Sell conditions: RSI > 70 AND price above upper band
+            if (rsi > 70 && last_price > upper_band) 
             {
                 should_place_order = true;
             }

@@ -79,6 +79,7 @@ public:
                     sendTraderListToInjector(injector_config);
                 }
 
+                /**  
                 for (auto watcher_config : simulation->watchers())
                 {
                     std::cout << "Initialising watcher: "
@@ -90,6 +91,7 @@ public:
                                 << std::endl;
                     configureNode(watcher_config);
                 }
+                */
 
                 std::cout << "[Orchestrator] Sending ORDER_INJECTION_START event to Order Injector.\n";
                 EventMessagePtr order_inject_start_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_START);
@@ -108,6 +110,7 @@ public:
                 trader_addresses_.clear();
                 std::cout << "Cleared trader addresses for next trial." << std::endl;
             }
+            std::cout << "Trading session ended." << std::endl;
             std::cout << "Finished all " << simulation->repetitions() << " simulation trials." << std::endl;
             EventMessagePtr stop_injection_msg = std::make_shared<EventMessage>(EventMessage::EventType::ORDER_INJECTION_STOP); // Stop injection entirely after all repetitions
             for (auto injector_config : simulation->injectors()) {

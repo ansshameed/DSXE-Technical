@@ -215,7 +215,7 @@ private:
         // Relaxed conditions: trade if EITHER OBV Delta OR VWAP signal
         if (trader_side_ == Order::Side::BID) 
         {
-            // Buy conditions: delta_obv > threshold OR last price below VWAP
+            // Buy conditions: delta_obv > threshold AND last price below VWAP (OR for flexibility in trades).
             if (delta_obv > (0.5 * threshold_) || last_price < rolling_vwap) 
             {
                 should_place_order = true;

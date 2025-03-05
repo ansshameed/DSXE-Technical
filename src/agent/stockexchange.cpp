@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <stack>
+#include <filesystem> 
 
 #include "stockexchange.hpp"
 #include "../utilities/syncqueue.hpp"
@@ -549,47 +550,83 @@ void StockExchange::addTradeableAsset(std::string_view ticker)
     std::cout << "Added " << ticker << " as a tradeable asset" << std::endl;
 };
 
+void StockExchange::confirmDirectory(const std::string& dirPath) {
+    std::filesystem::path dir(dirPath);
+    std::error_code ec;
+    
+    if (!std::filesystem::exists(dir, ec)) {
+        std::filesystem::create_directories(dir, ec);
+        if (ec) {
+            std::cerr << "Error creating directory " << dirPath << ": " << ec.message() << std::endl;
+        } else {
+            std::cout << "Created directory: " << dirPath << std::endl;
+        }
+    }
+}
+
+// Modify your createDataFiles method to use directories
 void StockExchange::createDataFiles(std::string_view ticker)
 {
+    // Create base directories for different file types
+    std::string lob_dir = "lob_snapshots";
+    std::string trades_dir = "trades";
+    std::string market_data_dir = "market_data";
+    std::string profits_dir = "profits";
+    
+    // Ensure directories exist
+    confirmDirectory(lob_dir);
+    confirmDirectory(trades_dir);
+    confirmDirectory(market_data_dir);
+    confirmDirectory(profits_dir);
+
     // Get current ISO 8601 timestamp
     std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::stringstream ss;
-    ss << std::put_time( std::localtime( &t ), "%FT%T" );
+    ss << std::put_time(std::localtime(&t), "%FT%T");
     std::string timestamp = ss.str(); 
 
-    // Set path to CSV files
-    std::string suffix = std::string{exchange_name_} + "_" + std::string{ticker} + "_"  + timestamp;
-    std::string trades_file = "trades_" + suffix + ".csv";
-    std::string market_data_file = "data_" + suffix + ".csv";
-    std::string lob_snapshot_file = "lob_snapshot_" + suffix + ".csv"; // LOB Snapshot file
-    std::string profits_file = "profits_snapshot_" + suffix + ".csv"; // Profits file
+    // Set path to CSV files with directories
+    std::string suffix = std::string{exchange_name_} + "_" + std::string{ticker} + "_" + timestamp;
+    std::string trades_file = trades_dir + "/" + "trades_" + suffix + ".csv";
+    std::string market_data_file = market_data_dir + "/" + "data_" + suffix + ".csv";
+    std::string lob_snapshot_file = lob_dir + "/" + "lob_snapshot_" + suffix + ".csv";
+    std::string profits_file = profits_dir + "/" + "profits_snapshot_" + suffix + ".csv";
 
-    // Create a CSV writers
+    // Create CSV writers
     CSVWriterPtr trade_writer = std::make_shared<CSVWriter>(trades_file);
     CSVWriterPtr market_data_writer = std::make_shared<CSVWriter>(market_data_file);
-    CSVWriterPtr lob_snapshot_writer = std::make_shared<CSVWriter>(lob_snapshot_file); // LOB Snapshot writer
-    CSVWriterPtr profits_writer = std::make_shared<CSVWriter>(profits_file); // Profits writer
+    CSVWriterPtr lob_snapshot_writer = std::make_shared<CSVWriter>(lob_snapshot_file);
+    CSVWriterPtr profits_writer = std::make_shared<CSVWriter>(profits_file);
 
     trade_tapes_.insert({std::string{ticker}, trade_writer});
     market_data_feeds_.insert({std::string{ticker}, market_data_writer});
-    lob_snapshot_.insert({std::string{ticker}, lob_snapshot_writer}); // LOB Snapshot writer (inserted into lob_snapshot_ map)
-    profits_writer_.insert({std::string{ticker}, profits_writer}); // Profits writer (inserted into profits_ map)
+    lob_snapshot_.insert({std::string{ticker}, lob_snapshot_writer});
+    profits_writer_.insert({std::string{ticker}, profits_writer});
+    
+    std::cout << "Created data files in organized directories for ticker: " << ticker << std::endl;
 }
 
+// Also modify createMessageTape method
 void StockExchange::createMessageTape() 
 {
+    // Create messages directory
+    std::string messages_dir = "messages";
+    confirmDirectory(messages_dir);
+    
     // Get current ISO 8601 timestamp
     std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
     std::stringstream ss;
-    ss << std::put_time( std::localtime( &t ), "%FT%T" );
+    ss << std::put_time(std::localtime(&t), "%FT%T");
     std::string timestamp = ss.str(); 
 
-    // Define CSV filename
-    std::string suffix = std::string{exchange_name_} + "_"  + timestamp;
-    std::string messages_file = "msgs_" + suffix + ".csv";
+    // Define CSV filename with directory
+    std::string suffix = std::string{exchange_name_} + "_" + timestamp;
+    std::string messages_file = messages_dir + "/" + "msgs_" + suffix + ".csv";
 
     // Create message writer
     this->message_tape_ = std::make_shared<CSVWriter>(messages_file);
+    
+    std::cout << "Created message tape in organized directory" << std::endl;
 }
 
 double StockExchange::calculatePEquilibrium(std::string_view ticker)
@@ -804,11 +841,13 @@ void StockExchange::endTradingSession()
     {
         writer->stop();
     }
+
+    std::cout << "Trading session ended.\n";
 }
 
 void StockExchange::writeProfitsToCSV()
 {
-    // Ensure we have profits to write
+    // Ensure profits to write.
     if (agent_profits_by_name_.empty()) {
         std::cout << "ERROR: No profits to write to CSV!\n";
         return;

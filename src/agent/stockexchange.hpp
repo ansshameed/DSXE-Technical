@@ -185,6 +185,9 @@ private:
     /** Checks the type of the incoming broadcast and makes a callback. */
     void handleBroadcastFrom(std::string_view sender, MessagePtr message) override;
 
+    /** Ensure directory to store data files exists. */
+    void confirmDirectory(const std::string& dirPath);
+
     /**
      *   PRIVATE MEMBERS
     */
