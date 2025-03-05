@@ -1,28 +1,40 @@
-# Run on Alpine
 FROM alpine:latest
 
-# Copy source files
-COPY CMakeLists.txt /app/CMakeLists.txt
-COPY src /app/src
+# Install necessary packages including process management tools
+RUN apk add --no-cache build-base cmake boost-dev aws-cli bash procps findutils
 
-# Set container working directory
+# Set up project structure
 WORKDIR /app
 
-# Install g++ and cmake
-RUN apk add build-base cmake
-
-# Install the boost library
-RUN apk add boost-dev
+# Copy source files and directory structure
+COPY CMakeLists.txt /app/
+COPY src/ /app/src/
+COPY scripts/ /app/scripts/
+COPY simulationexample.xml /app/
 
 # Build the project
-RUN cmake -B build
+RUN cmake -B build && \
+    cmake --build build
 
-# Compile the project
-RUN cmake --build build
+# Copy the XML config to the build directory for easier access
+RUN cp /app/simulationexample.xml /app/build/
 
-# Set working directory
-WORKDIR /app/simulation
+# Set working directory to the build directory where you normally run commands
+WORKDIR /app/build
 
-ENTRYPOINT [ "/app/build/simulation" ]
+# Modify run_simulations.sh to prevent it from killing itself
+COPY scripts/run_simulations.sh /app/build/
+RUN sed -i 's/SIM_PIDS=$(pgrep -f "simulation")/SIM_PIDS=$(ps -ef | grep -v grep | grep -v $$ | grep "[.]\/simulation" | awk "{print \$2}")/' /app/build/run_simulations.sh && \
+    chmod +x /app/build/run_simulations.sh
 
+# Simple run script for the container
+RUN echo '#!/bin/bash' > /app/build/docker_run.sh && \
+    echo 'set -e' >> /app/build/docker_run.sh && \
+    echo 'echo "===== RUNNING GENERATE_CONFIGS ====="' >> /app/build/docker_run.sh && \
+    echo './generate_configs' >> /app/build/docker_run.sh && \
+    echo 'echo "===== RUNNING SIMULATION ====="' >> /app/build/docker_run.sh && \
+    echo 'bash ./run_simulations.sh' >> /app/build/docker_run.sh && \
+    chmod +x /app/build/docker_run.sh
 
+# Default command - runs the script
+CMD ["/bin/bash", "/app/build/docker_run.sh"]

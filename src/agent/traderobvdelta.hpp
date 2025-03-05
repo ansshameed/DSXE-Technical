@@ -189,11 +189,11 @@ private:
             double last_price = last_market_data_.value()->last_price_traded;
 
             bool should_place_order = false;
-            if (trader_side_ == Order::Side::BID && delta_obv > threshold_) 
+            if (trader_side_ == Order::Side::BID && delta_obv > (0.5 * threshold_)) 
             {
                 should_place_order = true;
             }
-            else if (trader_side_ == Order::Side::ASK && delta_obv < -threshold_)
+            else if (trader_side_ == Order::Side::ASK && delta_obv < (0.5 * -threshold_))
             {
                 should_place_order = true;
             }

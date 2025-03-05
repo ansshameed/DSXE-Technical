@@ -1,28 +1,30 @@
 #!/bin/bash
 
 # Configuration parameters
-MARKETS_FILE="../build/markets.csv"
-XML_CONFIG="../simulationexample.xml"  # Path to your XML config file
+MARKETS_FILE="./markets.csv"
+XML_CONFIG="../simulationexample.xml"
 SIMULATION_EXECUTABLE="./simulation"
 TRIALS_PER_CONFIG=5  # Number of trials per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
 INJECTOR_PORT=8088
 BASE_ORCHESTRATOR_PORT=10001
+TEMP_CONFIG_PATH="./temp_config.csv"
 
-# Path where the orchestrator expects to find the temp_config.csv
-TEMP_CONFIG_PATH="../build/temp_config.csv"
-
-# Create all required directories in advance
+# Create required directories
 mkdir -p "$RESULTS_DIR/logs"
 mkdir -p "lob_snapshots" "trades" "market_data" "profits" "messages" "logs" "logs/traders"
-mkdir -p "$(dirname "$TEMP_CONFIG_PATH")"  # Make sure directory for temp config exists
+mkdir -p "$(dirname "$TEMP_CONFIG_PATH")"
 
-# Cleanup function to ensure all processes are killed
+# Store the script's own PID to avoid killing itself
+MY_PID=$$
+echo "Script running with PID: $MY_PID"
+
+# Fixed cleanup function that excludes our own process
 cleanup() {
     echo "Cleaning up all processes..."
     # Get PIDs for simulation processes
-    SIM_PIDS=$(pgrep -f "simulation")
+    SIM_PIDS=$(ps -ef | grep -v grep | grep -v "$MY_PID" | grep "[.]/simulation" | awk '{print $2}' || echo "")
     
     if [ -n "$SIM_PIDS" ]; then
         # First try SIGTERM
@@ -30,11 +32,20 @@ cleanup() {
         sleep 2
         
         # Force kill any remaining
-        REMAINING_PIDS=$(pgrep -f "simulation")
+        REMAINING_PIDS=$(ps -ef | grep -v grep | grep -v "$MY_PID" | grep "[.]/simulation" | awk '{print $2}' || echo "")
         if [ -n "$REMAINING_PIDS" ]; then
             kill -9 $REMAINING_PIDS 2>/dev/null || true
         fi
     fi
+    sleep 1
+    
+    # More robust cleanup
+    killall -9 simulation 2>/dev/null || true
+    sleep 1
+    
+    # Force release ports
+    echo "Forcibly releasing ports..."
+    fuser -k 9999/tcp 8088/tcp 10001/tcp 10002/tcp 10003/tcp 10004/tcp 10005/tcp 2>/dev/null || true
     sleep 1
 }
 
