@@ -38,10 +38,12 @@ endif()
 
 configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_configs.cpp ${CMAKE_BINARY_DIR}/generate_configs.cpp COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/run_simulations.sh ${CMAKE_BINARY_DIR}/run_simulations.sh COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/upload_to_s3.sh ${CMAKE_BINARY_DIR}/upload_to_s3.sh COPYONLY)
 
 add_custom_command(
     TARGET simulation POST_BUILD
     COMMAND chmod +x ${CMAKE_BINARY_DIR}/run_simulations.sh
+    COMMAND chmod +x ${CMAKE_BINARY_DIR}/upload_to_s3.sh
 )
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/lob_snapshots)

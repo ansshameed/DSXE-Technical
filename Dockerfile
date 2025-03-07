@@ -27,8 +27,17 @@ COPY scripts/run_simulations.sh /app/build/
 RUN sed -i 's/SIM_PIDS=$(pgrep -f "simulation")/SIM_PIDS=$(ps -ef | grep -v grep | grep -v $$ | grep "[.]\/simulation" | awk "{print \$2}")/' /app/build/run_simulations.sh && \
     chmod +x /app/build/run_simulations.sh
 
+COPY scripts/upload_to_s3.sh /app/build/
+RUN chmod +x /app/build/upload_to_s3.sh
+    
+
 # Simple run script for the container
 RUN echo '#!/bin/bash' > /app/build/docker_run.sh && \
+    echo 'echo "===== CHECKING AWS CREDENTIALS ====="' >> /app/build/docker_run.sh && \
+    echo 'if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then' >> /app/build/docker_run.sh && \
+    echo '  echo "Warning: AWS credentials not set. S3 upload may fail."' >> /app/build/docker_run.sh && \
+    echo '  echo "Run container with -e AWS_ACCESS_KEY_ID=your_key -e AWS_SECRET_ACCESS_KEY=your_secret"' >> /app/build/docker_run.sh && \
+    echo 'fi' >> /app/build/docker_run.sh && \
     echo 'set -e' >> /app/build/docker_run.sh && \
     echo 'echo "===== RUNNING GENERATE_CONFIGS ====="' >> /app/build/docker_run.sh && \
     echo './generate_configs' >> /app/build/docker_run.sh && \

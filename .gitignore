@@ -40,3 +40,5 @@ build/
 
 # Other
 .DS_STORE
+.env
+aws/

@@ -4,12 +4,16 @@
 MARKETS_FILE="./markets.csv"
 XML_CONFIG="../simulationexample.xml"
 SIMULATION_EXECUTABLE="./simulation"
-TRIALS_PER_CONFIG=5  # Number of trials per configuration
+TRIALS_PER_CONFIG=5 # Number of trials per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
 INJECTOR_PORT=8088
 BASE_ORCHESTRATOR_PORT=10001
 TEMP_CONFIG_PATH="./temp_config.csv"
+
+S3_UPLOAD_SCRIPT="./upload_to_s3.sh"
+S3_BUCKET="dsxe-results"
+SIMULATION_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
 # Create required directories
 mkdir -p "$RESULTS_DIR/logs"
@@ -214,6 +218,14 @@ while IFS=, read -r zic shvr vwap bb macd obvd obvvwap rsi rsibb zip || [ -n "$z
         echo "Waiting 5 seconds before next trial..."
         sleep 5
     done
+
+    #S3 upload script called here
+    if [ -f "$S3_UPLOAD_SCRIPT" ]; then
+        echo "Uploading data for configuration $CONFIG_NUM to S3..."
+        bash "$S3_UPLOAD_SCRIPT" "$S3_BUCKET" "${SIMULATION_TIMESTAMP}/config_${CONFIG_NUM}" "$CONFIG_NUM"
+    else
+        echo "S3 upload script not found at $S3_UPLOAD_SCRIPT, skipping upload."
+    fi
     
     CONFIG_NUM=$((CONFIG_NUM + 1))
 done < "$MARKETS_FILE"
@@ -221,5 +233,14 @@ done < "$MARKETS_FILE"
 # Final cleanup
 cleanup
 rm -f "$TEMP_CONFIG_PATH"
+
+#Ensure any remaining data is uploaded to S3
+if [ -f "$S3_UPLOAD_SCRIPT" ]; then
+    echo "Performing final upload of all data to S3..."
+    bash "$S3_UPLOAD_SCRIPT" "$S3_BUCKET" "${SIMULATION_TIMESTAMP}/final" "all"
+    echo "Upload complete!"
+else
+    echo "S3 upload script not found at $S3_UPLOAD_SCRIPT, skipping upload."
+fi
 
 echo "All configurations completed!"
