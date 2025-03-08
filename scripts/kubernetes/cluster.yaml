@@ -1,0 +1,23 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: dsxe-lob-simulation
+  region: eu-north-1  # Change to your preferred region
+
+nodeGroups:
+  - name: spot-workers
+    instancesDistribution:
+      maxPrice: 0.1
+      instanceTypes: ["m5.large"]
+      onDemandBaseCapacity: 0
+      onDemandPercentageAboveBaseCapacity: 0
+      spotInstancePools: 1
+    desiredCapacity: 5
+    minSize: 1
+    maxSize: 10
+    ssh:
+      allow: false
+    labels: {role: worker}
+    tags:
+      nodegroup-role: worker
