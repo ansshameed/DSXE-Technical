@@ -4,14 +4,20 @@
 # Exit on any error
 set -e
 
+# Access CONFIG values from environment variables
+CONFIG_START=${CONFIG_START:-0}
+CONFIG_END=${CONFIG_END:-0}
+
 # Input parameters with defaults
 S3_BUCKET=${1:-"trading-simulation-results"}
-S3_PREFIX=${2:-"simulation-$(date +%Y%m%d-%H%M%S)"}
+# Use CONFIG_START and CONFIG_END in the prefix to make it unique
+S3_PREFIX=${2:-"batch_${CONFIG_START}_${CONFIG_END}_$(date +%Y%m%d-%H%M%S)"}
 CONFIG_NUM=${3:-"unknown"}
 
 echo "Uploading LOB snapshots and profits to S3..."
 echo "Bucket: s3://$S3_BUCKET/$S3_PREFIX/"
 echo "Configuration: $CONFIG_NUM"
+echo "Config range: $CONFIG_START-$CONFIG_END"
 
 # Create temporary directories for renamed files
 TEMP_LOB_DIR="./tmp_lob_renamed"
@@ -50,8 +56,9 @@ process_and_upload() {
             filename=$(basename "$file")
             processed=$((processed + 1))
             
-            # Create new filename with current configuration
-            new_filename="config_${current_config}_trial_unknown_${filename}"
+            absolute_config=$((CONFIG_START + current_config - 1))
+            # Create new filename with current configuration and range to make it unique
+            new_filename="config_${absolute_config}_range_${CONFIG_START}_${CONFIG_END}_${filename}"
             
             # Copy file to temp directory with new filename
             cp "$file" "$temp_dir/$new_filename"

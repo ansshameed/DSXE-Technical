@@ -42,3 +42,5 @@ build/
 .DS_STORE
 .env
 aws/
+AWSCLIV2.pkg
+awscliv2.zip
