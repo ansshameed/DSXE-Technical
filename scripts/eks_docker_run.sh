@@ -3,7 +3,7 @@
 # Read configuration range from environment variables (with defaults)
 CONFIG_START=${CONFIG_START:-0}
 CONFIG_END=${CONFIG_END:-24643}
-TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-5}
+TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-3}
 
 echo "===== CHECKING AWS CREDENTIALS ====="
 if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
@@ -32,9 +32,9 @@ if [ "$CONFIG_START" -ne 0 ] || [ "$CONFIG_END" -ne 24643 ]; then
 fi
 
 # Update the TRIALS_PER_CONFIG in run_simulations.sh
-if [ "$TRIALS_PER_CONFIG" -ne 5 ]; then
+if [ "$TRIALS_PER_CONFIG" -ne 3 ]; then
   echo "Setting trials per configuration to $TRIALS_PER_CONFIG..."
-  sed -i "s/TRIALS_PER_CONFIG=5/TRIALS_PER_CONFIG=$TRIALS_PER_CONFIG/" ./run_simulations.sh
+  sed -i "s/TRIALS_PER_CONFIG=3/TRIALS_PER_CONFIG=$TRIALS_PER_CONFIG/" ./run_simulations.sh
 fi
 
 # Create simulation timestamp based on batch

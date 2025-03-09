@@ -49,7 +49,7 @@ int main() {
     };
 
     // Configuration parameters
-    int trials_per_configuration = 5;
+    int trials_per_configuration = 3;
 
     // Debug: Print the current working directory
     std::cout << "Writing to current directory: ";

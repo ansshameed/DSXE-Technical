@@ -2,7 +2,10 @@
 
 # Configuration
 TOTAL_CONFIGS=24643
-CONFIGS_PER_BATCH=2000
+TRIALS_PER_CONFIG=3
+
+# Smaller batches for better distribution
+CONFIGS_PER_BATCH=500
 ECR_URI="588738568626.dkr.ecr.eu-west-2.amazonaws.com/dsxe-lob-simulation"
 
 # Ensure output directory exists
@@ -27,8 +30,8 @@ kind: Job
 metadata:
   name: dsxe-simulation-batch-$i
 spec:
-  parallelism: 16
-  completions: 16
+  parallelism: 1
+  completions: 1
   backoffLimit: 4
   template:
     spec:
@@ -37,8 +40,8 @@ spec:
         image: $ECR_URI:latest
         resources:
           requests:
-            memory: "2Gi"
-            cpu: "1"
+            memory: "3Gi"
+            cpu: "1.5"
           limits:
             memory: "4Gi"
             cpu: "2"
@@ -48,7 +51,7 @@ spec:
         - name: CONFIG_END
           value: "$CONFIG_END"
         - name: TRIALS_PER_CONFIG
-          value: "5"
+          value: "3"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:

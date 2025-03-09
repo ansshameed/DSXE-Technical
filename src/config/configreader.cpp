@@ -622,9 +622,9 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
         {
             int count = std::stoi(tokens[index]); // Convert token to integer
 
-            // Validate that each value is between 0 and 5. (0-5 buyers + sellers per agent type)
-            if (count < 0 || count > 5) {
-                throw std::runtime_error("Invalid value in CSV: each value must be between 0 and 5.");
+            // Validate that each value is positive. 
+            if (count < 0) {
+                throw std::runtime_error("Invalid value in CSV: each value must be above positive.");
             }
 
             std::string trader_string_name = trader_types[index]; // Get trader type from index

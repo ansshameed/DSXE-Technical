@@ -4,10 +4,14 @@
 # Exit on any error
 set -e
 
+export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+export AWS_REGION="eu-north-1"
+
 # Access CONFIG values from environment variables
 CONFIG_START=${CONFIG_START:-0}
 CONFIG_END=${CONFIG_END:-0}
-TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-5}
+TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-3}
 
 # Input parameters with defaults - using a fixed root directory
 S3_BUCKET=${1:-"dsxe-results"}
@@ -67,7 +71,7 @@ process_and_upload() {
             cp "$file" "$temp_dir/$new_filename"
             
             # Upload directly to the root structure by data type
-            aws s3 cp "$temp_dir/$new_filename" "s3://$S3_BUCKET/$S3_PREFIX/${data_type}/" --quiet
+            aws s3 cp "$temp_dir/$new_filename" "s3://$S3_BUCKET/$S3_PREFIX/${data_type}/" --region $AWS_REGION
             
             echo "Uploaded $data_type for config $absolute_config, trial $trial_count"
             

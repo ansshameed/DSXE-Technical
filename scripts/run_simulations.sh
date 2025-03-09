@@ -4,7 +4,7 @@
 MARKETS_FILE="./markets.csv"
 XML_CONFIG="../simulationexample.xml"
 SIMULATION_EXECUTABLE="./simulation"
-TRIALS_PER_CONFIG=5 # Number of trials per configuration
+TRIALS_PER_CONFIG=3 # Number of trials per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
 INJECTOR_PORT=8088
@@ -116,7 +116,7 @@ run_trial() {
     
     # Wait for the trading session to end
     echo "Waiting for trading session to end..."
-    local max_wait=180  # Maximum wait time in seconds
+    local max_wait=100  # Maximum wait time in seconds
     local elapsed=0
     local found_completion=false
 
@@ -215,8 +215,8 @@ while IFS=, read -r zic shvr vwap bb macd obvd obvvwap rsi rsibb zip || [ -n "$z
         fi
         
         # Wait between trials
-        echo "Waiting 5 seconds before next trial..."
-        sleep 5
+        echo "Waiting 2 seconds before next trial..."
+        sleep 2
     done
 
     #S3 upload script called here
