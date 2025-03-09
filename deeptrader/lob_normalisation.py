@@ -2,10 +2,12 @@
 """
 LOB Snapshot Normaliser for dsxe-results S3 bucket with file limit
 
+Purpose: Normalise LOB snapshot data to [0,1] from the dsxe-results S3 bucket
+
 This script:
 1. Connects to the dsxe-results S3 bucket
 2. Reads a limited number of LOB snapshots from the all_simulation_data/lob_snapshot path
-3. Calculates min/max values for each feature
+3. Calculates min/max values for each feature to scale to [0, 1]
 4. Normalises the data using min-max normalisation
 5. Saves the normalised data and normalisation parameters
 
@@ -44,7 +46,7 @@ def list_s3_files(bucket_name, prefix, region, max_files=None):
     
     print(f"Listing files in bucket: {bucket_name}/{prefix}")
     
-    # Use pagination to handle large buckets
+    # Use pagination to handle large buckets and get lists of objects
     file_keys = []
     paginator = s3.get_paginator('list_objects_v2')
     
