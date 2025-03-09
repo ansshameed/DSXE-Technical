@@ -7,17 +7,17 @@ set -e
 # Access CONFIG values from environment variables
 CONFIG_START=${CONFIG_START:-0}
 CONFIG_END=${CONFIG_END:-0}
+TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-5}
 
-# Input parameters with defaults
-S3_BUCKET=${1:-"trading-simulation-results"}
-# Use CONFIG_START and CONFIG_END in the prefix to make it unique
-S3_PREFIX=${2:-"batch_${CONFIG_START}_${CONFIG_END}_$(date +%Y%m%d-%H%M%S)"}
+# Input parameters with defaults - using a fixed root directory
+S3_BUCKET=${1:-"dsxe-results"}
+S3_PREFIX="all_simulation_data"
 CONFIG_NUM=${3:-"unknown"}
 
 echo "Uploading LOB snapshots and profits to S3..."
 echo "Bucket: s3://$S3_BUCKET/$S3_PREFIX/"
-echo "Configuration: $CONFIG_NUM"
-echo "Config range: $CONFIG_START-$CONFIG_END"
+echo "Processing configurations from $CONFIG_START to $CONFIG_END"
+echo "Each configuration has $TRIALS_PER_CONFIG trials"
 
 # Create temporary directories for renamed files
 TEMP_LOB_DIR="./tmp_lob_renamed"
@@ -34,75 +34,59 @@ rm -rf "$TEMP_PROFITS_DIR"/*
 process_and_upload() {
     local src_dir="$1"
     local temp_dir="$2"
-    local target_prefix="$3"
-    local dir_type="$4"
+    local data_type="$3"
     local current_config="$CONFIG_NUM"
-
+    
     if [ ! -d "$src_dir" ]; then
-        echo "$dir_type directory not found at $src_dir, skipping."
+        echo "$data_type directory not found at $src_dir, skipping."
         return 0
     fi
-
-    echo "Processing $dir_type files with trial numbers..."
     
-    # Count files for progress reporting
+    echo "Processing $data_type files..."
+    
+    # Count files to determine trials per configuration
     local total_files=$(find "$src_dir" -name "*.csv" | wc -l)
-    local processed=0
-    local filtered_files=0
+    echo "Found $total_files $data_type files"
+    
+    # Calculate actual configuration number based on CONFIG_START and current_config
+    local absolute_config=$((CONFIG_START + current_config - 1))
+    echo "Processing absolute configuration: $absolute_config"
+    
+    # Track trial number
+    local trial_count=1
     
     # For each file in source directory
     for file in "$src_dir"/*.csv; do
         if [ -f "$file" ]; then
             filename=$(basename "$file")
-            processed=$((processed + 1))
             
-            absolute_config=$((CONFIG_START + current_config - 1))
-            # Create new filename with current configuration and range to make it unique
-            new_filename="config_${absolute_config}_range_${CONFIG_START}_${CONFIG_END}_${filename}"
+            # Create new simpler filename with configuration number and trial number
+            new_filename="config_${absolute_config}_trial_${trial_count}_${data_type}.csv"
             
             # Copy file to temp directory with new filename
             cp "$file" "$temp_dir/$new_filename"
-            filtered_files=$((filtered_files + 1))
             
-            # Show progress every 10 files
-            if [ $((processed % 10)) -eq 0 ] || [ $processed -eq $total_files ]; then
-                echo "  Processed $processed/$total_files $dir_type files"
-            fi
+            # Upload directly to the root structure by data type
+            aws s3 cp "$temp_dir/$new_filename" "s3://$S3_BUCKET/$S3_PREFIX/${data_type}/" --quiet
+            
+            echo "Uploaded $data_type for config $absolute_config, trial $trial_count"
+            
+            # Increment trial count
+            trial_count=$((trial_count + 1))
         fi
     done
     
-    echo "  Selected $filtered_files files for configuration $current_config"
-    
-    # Check if any files were processed
-    if [ "$(ls -A "$temp_dir")" ]; then
-        echo "Uploading $dir_type files to S3..."
-        # Add retry logic for more robustness
-        for attempt in {1..3}; do
-            if aws s3 cp "$temp_dir" "s3://$S3_BUCKET/$S3_PREFIX/$target_prefix" --recursive; then
-                echo "  Upload of $dir_type files complete!"
-                break
-            else
-                echo "  Upload attempt $attempt failed, retrying in 5 seconds..."
-                sleep 5
-            fi
-            
-            if [ $attempt -eq 3 ]; then
-                echo "  Warning: Failed to upload $dir_type files after 3 attempts."
-            fi
-        done
-    else
-        echo "No $dir_type files found to upload for configuration $current_config."
-    fi
+    echo "Completed uploading $((trial_count-1)) trials for config $absolute_config"
 }
 
 # Process LOB snapshots
-process_and_upload "./lob_snapshots" "$TEMP_LOB_DIR" "lob_snapshots" "LOB snapshot"
+process_and_upload "./lob_snapshots" "$TEMP_LOB_DIR" "lob_snapshot"
 
 # Process profits data
-process_and_upload "./profits" "$TEMP_PROFITS_DIR" "profits" "profit"
+process_and_upload "./profits" "$TEMP_PROFITS_DIR" "profit"
 
 # Clean up temp directories
-rm -rf "$TEMP_LOB_DIR" "$TEMP_PROFITS_DIR" 
+rm -rf "$TEMP_LOB_DIR" "$TEMP_PROFITS_DIR"
 
 # Clear source files after successful upload to prevent duplicates in future uploads
 echo "Cleaning up source directories after successful upload..."

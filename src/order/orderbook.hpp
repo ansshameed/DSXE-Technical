@@ -93,7 +93,7 @@ public:
     /** Calculates micro price. */
     double calculateMicroPrice();
 
-    /* Gets side; BID = 0, ASK = 1. */
+    /* Gets side; BID = 1, ASK = 0. */
     int getAggressingSide(Order::Side aggressing_side); 
 
     /** Calculates order book imbalance. */

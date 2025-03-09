@@ -104,58 +104,6 @@ void StockExchange::onLimitOrder(LimitOrderMessagePtr msg)
 
     // Check if it crosses the spread 
     bool crosses = crossesSpread(order); 
-    if (crosses) 
-    { 
-
-        // Build the pre-trde snapshot. The LOB as it stands right now, before matching 
-        // Get the elapsed time since the start of the trading session, before matching 
-        auto now = std::chrono::high_resolution_clock::now();
-        double elapsed_time = std::chrono::duration<double, std::milli>(now - trading_session_start_time_).count();
-
-        double time_diff = 0.0; 
-        if (last_trade_time_.find(order->ticker) != last_trade_time_.end())
-        {
-            time_diff = std::chrono::duration<double, std::milli>(now - last_trade_time_[order->ticker]).count();
-        }
-        else 
-        { 
-            time_diff = 0.0; 
-        }
-
-        // Grab the current LOB data. Before trade executed, record the snapshot as the market sees it now. 
-        // This snapshot is the one that triggered the crossing condition i.e. the reason a trade will occur 
-        // order->price in chosen_price so it has the limit the agent submitted
-        // 13 features + 1 target row each time an order arrives and crosses the spread 
-        // The row's chosen_price is the limit price that triggered the trade 
-        // LOB data recoeded before any matching or partial filles, which is 'the snapshot S that T saw at the time T issued a quote Q' 
-        MarketDataPtr data = getOrderBookFor(order->ticker)->getLiveMarketData(msg->side); 
-        if (data) 
-        { 
-            double p_equilibrium = calculatePEquilibrium(order->ticker);
-            double smiths_alpha = calculateSmithsAlpha(order->ticker);
-            int side_int = (order->side == Order::Side::BID) ? 1 : 0;
-            
-            LOBSnapshotPtr lob_data = std::make_shared<LOBSnapshot>( 
-                data->ticker, 
-                side_int, 
-                static_cast<unsigned long long>(elapsed_time), 
-                static_cast<unsigned long long>(time_diff),
-                data->best_bid,
-                data->best_ask, 
-                data->micro_price,
-                data->mid_price,
-                data->imbalance,
-                data->spread,
-                data->total_volume, 
-                p_equilibrium,
-                smiths_alpha,
-                order->price
-            ); 
-
-            addLOBSnapshot(lob_data);
-        }
-    }
-
 
     // Matching 
     if (crosses)
@@ -455,6 +403,44 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
     aggressing_report->sender_id = this->agent_id;
     sendExecutionReport(std::to_string(resting_order->sender_id), resting_report);
     sendExecutionReport(std::to_string(aggressing_order->sender_id), aggressing_report);
+
+    MarketDataPtr data = getOrderBookFor(resting_order->ticker)->getLiveMarketData(aggressing_order->side);
+    if (data) 
+    {
+        double p_equilibrium = calculatePEquilibrium(resting_order->ticker);
+        double smiths_alpha = calculateSmithsAlpha(resting_order->ticker);
+        int side_int = (aggressing_order->side == Order::Side::BID) ? 1 : 0;
+
+        // Limit price from the aggressing order (the one that initiated the trade) 
+        double limit_price = 0.0; 
+        if (aggressing_limit_order) {
+            limit_price = aggressing_limit_order->price;
+        } else {
+            // For market orders, we use the trade price as the limit price
+            limit_price = trade->price;
+        }
+
+        LOBSnapshotPtr lob_data = std::make_shared<LOBSnapshot>( 
+            data->ticker, 
+            side_int, 
+            static_cast<unsigned long long>(elapsed_time), 
+            static_cast<unsigned long long>(time_diff),
+            data->best_bid,
+            data->best_ask, 
+            data->micro_price,
+            data->mid_price,
+            data->imbalance,
+            data->spread,
+            data->total_volume, 
+            p_equilibrium,
+            smiths_alpha,
+            limit_price,  // Limit price chosen for the trade
+            trade->price  // Actual trade price as target variable
+        ); 
+
+        addLOBSnapshot(lob_data);
+    }
+
     publishMarketData(resting_order->ticker, aggressing_order->side);
 }
 

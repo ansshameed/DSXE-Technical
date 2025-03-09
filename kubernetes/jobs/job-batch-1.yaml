@@ -1,0 +1,40 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dsxe-simulation-batch-1
+spec:
+  parallelism: 16
+  completions: 16
+  backoffLimit: 4
+  template:
+    spec:
+      containers:
+      - name: dsxe-lob-simulation
+        image: 588738568626.dkr.ecr.eu-west-2.amazonaws.com/dsxe-lob-simulation:latest
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1"
+          limits:
+            memory: "4Gi"
+            cpu: "2"
+        env:
+        - name: CONFIG_START
+          value: "0"
+        - name: CONFIG_END
+          value: "1999"
+        - name: TRIALS_PER_CONFIG
+          value: "5"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws-access-key-id
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: aws-credentials
+              key: aws-secret-access-key
+        - name: S3_BUCKET
+          value: "dsxe-results"
+      restartPolicy: OnFailure
