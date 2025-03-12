@@ -6,14 +6,22 @@ set(CMAKE_CXX_STANDARD 20)
 find_package(Boost 1.76.0 COMPONENTS system filesystem serialization program_options REQUIRED)
 
 if(Boost_FOUND)
-
     message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
     message(STATUS "Boost_LIBRARIES: ${Boost_LIBRARIES}")
     message(STATUS "Boost_VERSION: ${Boost_VERSION}")
-
     include_directories(${Boost_INCLUDE_DIRS})
-
 endif()
+
+# Find Python and pybind11 for DeepTrader
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+find_package(pybind11 REQUIRED)
+include_directories(
+    ${Python3_INCLUDE_DIRS}
+    ${Python3_NumPy_INCLUDE_DIRS}
+)
+
+# Find JSON library
+find_package(nlohmann_json REQUIRED)
 
 add_executable(simulation src/main.cpp
                           src/networking/tcpserver.cpp
@@ -30,11 +38,17 @@ add_executable(simulation src/main.cpp
 
 add_executable(generate_configs scripts/generate_configs.cpp)
 
+# Link libraries AFTER defining the targets
 if(Boost_FOUND)
-
     target_link_libraries(simulation ${Boost_LIBRARIES})
-
 endif()
+
+target_link_libraries(simulation 
+    ${Python3_LIBRARIES}
+    pybind11::embed
+    pybind11::module
+    nlohmann_json::nlohmann_json  # Add JSON library here
+)
 
 configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_configs.cpp ${CMAKE_BINARY_DIR}/generate_configs.cpp COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/run_simulations.sh ${CMAKE_BINARY_DIR}/run_simulations.sh COPYONLY)

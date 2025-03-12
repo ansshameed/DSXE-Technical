@@ -96,8 +96,8 @@ SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
     //} 
 
     // Traders - CSV VERSION for dynamic allocation from markets.csv
-    std::string csv_filepath = "../build/temp_config.csv"; // Default path for markets.csv
-    //std::string csv_filepath = "../markets.csv"; // Default path for markets.csv
+    //std::string csv_filepath = "../build/temp_config.csv"; // Default path for markets.csv
+    std::string csv_filepath = "../markets.csv"; // Default path for markets.csv
     // Use a command-line argument if provided
     if (filepath.find(".csv") != std::string::npos) { // Check if the filepath is a CSV file
         csv_filepath = filepath; // Set the CSV filepath
@@ -202,6 +202,10 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         case AgentType::ORDER_INJECTOR:
         {
             return configureOrderInjector(id, xml_node, addr, exchange_addrs);
+        }
+        case AgentType::TRADER_DEEP_LSTM:
+        {
+            return configureTrader(id, xml_node, addr, exchange_addrs, type);
         }
         default:
         {
@@ -582,7 +586,7 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
     int port = 8100; // Start assigning trader ports from 8100
 
     // These are the expected trader types (exactly 10 values).
-    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb", "zip"};
+    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb", "zip", "deeplstm"};
     std::unordered_map<std::string, AgentType> agent_type_map = {
         {"zic", AgentType::TRADER_ZIC}, 
         {"shvr", AgentType::TRADER_SHVR},
@@ -593,7 +597,8 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
         {"obvvwap", AgentType::TRADER_OBV_VWAP},
         {"rsi", AgentType::TRADER_RSI},
         {"rsibb", AgentType::TRADER_RSI_BB}, 
-        {"zip", AgentType::TRADER_ZIP}
+        {"zip", AgentType::TRADER_ZIP}, 
+        {"deeplstm", AgentType::TRADER_DEEP_LSTM}
     };
 
     // Use default exchange name and ticker from XML - WORKS ONLY FOR ONE EXCHANGE; CHANGE FOR ARBITRAGE. 
@@ -612,9 +617,9 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
             tokens.push_back(token);
         }
 
-        // Validate exactly 10 agents (tokens). 
-        if (tokens.size() != 10) {
-            throw std::runtime_error("Invalid CSV format: each line must contain exactly 10 comma-separated values.");
+        // Validate exactly 11 agents (tokens). 
+        if (tokens.size() != 11) {
+            throw std::runtime_error("Invalid CSV format: each line must contain exactly 11 comma-separated values.");
         }
 
         // Process each token

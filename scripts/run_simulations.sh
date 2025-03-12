@@ -223,7 +223,7 @@ while IFS=, read -r zic shvr vwap bb macd obvd obvvwap rsi rsibb zip || [ -n "$z
     if [ -f "$S3_UPLOAD_SCRIPT" ]; then
         echo "Uploading data for configuration $CONFIG_NUM to S3..."
         # Change this line (around line 208 in your script)
-        bash "$S3_UPLOAD_SCRIPT" "$S3_BUCKET" "" "$CONFIG_NUM"
+        bash "$S3_UPLOAD_SCRIPT" "$S3_BUCKET" "" "$CONFIG_NUM" &
     else
         echo "S3 upload script not found at $S3_UPLOAD_SCRIPT, skipping upload."
     fi

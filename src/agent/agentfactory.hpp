@@ -20,6 +20,7 @@
 #include "traderrsibb.hpp"
 #include "traderobvvwap.hpp"
 #include "arbitragetrader.hpp"
+#include "deeptraderlstm.hpp"
 
 class AgentFactory
 {
@@ -122,6 +123,11 @@ public:
                 std::shared_ptr<Agent> agent (new TraderVWAPOBVDelta{network_entity, std::static_pointer_cast<TraderConfig>(config), lookback_vwap, lookback_obv, delta_length, threshold});
                 return agent;
             }
+            case AgentType::TRADER_DEEP_LSTM:
+            {
+                std::shared_ptr<Agent> agent (new  TraderDeepLSTM{network_entity, std::static_pointer_cast<TraderConfig>(config)});
+                return agent;
+            }
             case AgentType::ARBITRAGE_TRADER:
             {
                 std::shared_ptr<Agent> agent (new ArbitrageTrader{network_entity, std::static_pointer_cast<ArbitrageurConfig>(config)});
@@ -160,7 +166,8 @@ private:
         {std::string{"vwap"}, AgentType::TRADER_VWAP},
         {std::string{"rsibb"}, AgentType::TRADER_RSI_BB},
         {std::string{"obvvwap"}, AgentType::TRADER_OBV_VWAP},
-        {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}
+        {std::string{"arbitrageur"}, AgentType::ARBITRAGE_TRADER}, 
+        {std::string{"deeplstm"}, AgentType::TRADER_DEEP_LSTM} 
     };
 
 };

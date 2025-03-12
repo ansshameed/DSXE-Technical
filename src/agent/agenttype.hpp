@@ -16,7 +16,8 @@ enum class AgentType : int
     TRADER_VWAP, // Volume Weighted Average Price
     TRADER_RSI_BB, // RSI and Bollinger Bands
     TRADER_OBV_VWAP, // OBV and VWAP
-    ARBITRAGE_TRADER    
+    ARBITRAGE_TRADER, 
+    TRADER_DEEP_LSTM, // DeepTrader LSTM
 };
 
 inline std::string to_string(AgentType agent_type)
@@ -36,6 +37,7 @@ inline std::string to_string(AgentType agent_type)
         case AgentType::TRADER_RSI_BB: return std::string{"TraderBBRSI"};
         case AgentType::TRADER_OBV_VWAP: return std::string{"TraderOBVVWAP"};
         case AgentType::ARBITRAGE_TRADER: return std::string{"ArbitrageTrader"};
+        case AgentType::TRADER_DEEP_LSTM: return std::string{"DeepTraderLSTM"};
         default: return std::string{""};
     }
 }
