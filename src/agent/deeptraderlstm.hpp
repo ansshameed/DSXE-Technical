@@ -1,19 +1,18 @@
-// trader_deep.hpp
-#ifndef TRADER_DEEP_HPP
-#define TRADER_DEEP_HPP
+// trader_deep_integrated.hpp
+#ifndef TRADER_DEEP_INTEGRATED_HPP
+#define TRADER_DEEP_INTEGRATED_HPP
 
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
 #include "../message/customer_order_message.hpp"
 #include <cmath>
 #include <filesystem>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <fstream>
+#include <iostream>
 #include <nlohmann/json.hpp>
+#include "onnxruntime/onnxruntime_cxx_api.h"
 
-using json = nlohmann::json; // JSON application for C++ 
+using json = nlohmann::json;
 
 class TraderDeepLSTM : public TraderAgent
 {
@@ -23,25 +22,19 @@ public:
     exchange_{config->exchange_name},
     ticker_{config->ticker},
     trader_side_{config->side},
-    limit_price_{config->limit},
-    python_server_host_{"127.0.0.1"}, // Python end point for model prediction
-    python_server_port_{8777}
+    limit_price_{config->limit}
     {
         // Create a log file
         std::ofstream init_log("./logs/deeptrader_init.log", std::ios::app);
-        init_log << "--- TraderDeepLSTM Initialisation START ---" << std::endl;
+        init_log << " TraderDeepLSTM Initialisation START " << std::endl;
         init_log << "Timestamp: " << std::time(nullptr) << std::endl;
         
-        // Start Python server if not already running - should be ran before exchange
-        if (!isServerRunning()) {
-            startPythonServer();
-            // Wait for server to start
-            std::this_thread::sleep_for(std::chrono::seconds(2));
-        }
+        // Initialise ONNX Runtime and load the model
+        initialiseModel();
         
-        // Test connection to Python server
-        py_initialized_ = testServerConnection();
-        init_log << "Python server connection test: " << (py_initialized_ ? "SUCCESS" : "FAILED") << std::endl;
+        // Test model connection
+        model_initialised_ = testModelInitialisation();
+        init_log << "ONNX model initialisation test: " << (model_initialised_ ? "SUCCESS" : "FAILED") << std::endl;
         
         // No delayed start for deep trader
         is_legacy_trader_ = true;
@@ -56,13 +49,9 @@ public:
     }
 
     ~TraderDeepLSTM() {
-        // Clean up server process if needed
-        if (server_pid_ > 0) {
-            kill(server_pid_, SIGTERM);
-        }
     }
     
-    std::string getAgentName() const override { return "DEEPLSTM"; }
+    std::string getAgentName() const override { return "DEEPLSTM"; } // To determine if legacy trader
     
     void onTradingStart() override
     {
@@ -78,7 +67,6 @@ public:
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
-
         if (!is_trading_) {
             return;
         }
@@ -179,7 +167,7 @@ public:
                 std::lock_guard<std::mutex> lock(mutex_);
                 // Use a stack like TraderShaver
                 customer_orders_.push(cust_msg);
-                std::cout << "[DEEP] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+                std::cout << "[DEEPLSTM] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
             }
             return;
         }
@@ -196,140 +184,279 @@ private:
         int qty;
         std::string otype;
     };
-
-    // Failover mechanism to check if Python server is running by establishing TCP connection to host and port (returns true if server is running)
-    bool isServerRunning() {
-        
-        // Create new TCP socket and return false if socket creation fails
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) return false;
-        
-        // Initialise socket address structure with target Python server's IP address adn port number; preparing for connection attempt
-        struct sockaddr_in serv_addr;
-        memset(&serv_addr, 0, sizeof(serv_addr));
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(python_server_port_);
-        inet_pton(AF_INET, python_server_host_.c_str(), &serv_addr.sin_addr);
-        
-        // Attempt to connect to the Python server and return true if connection is successful
-        bool running = (::connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) >= 0);
-        close(sock);
-        return running;
-    }
     
-    // Starts Python server by forking a new process and executing the Python script (replaces current program with Python interpreter running deep_trader_server.py)
-    // Parent process continues execution while child process executes the Python script
-    void startPythonServer() {
-        server_pid_ = fork();
-        if (server_pid_ == 0) {
-            // Child process
-            execl("/usr/bin/python3", "python3", "../src/deeptrader/deep_trader_server.py", NULL);
-            exit(1); // If execl fails
+    // ONNX Runtime environment and session for smart pointer to NN inference session
+    Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "TraderDeepLSTM"};
+    Ort::SessionOptions session_options;
+    std::unique_ptr<Ort::Session> ort_session;
+    
+    // Storage for model normalisation parameters
+    std::vector<float> min_values;
+    std::vector<float> max_values;
+    
+    void initialiseModel() {
+        try {
+            std::string model_path = "../src/deeptrader/models/DeepTrader_LSTM/DeepTrader_LSTM.onnx"; // Access model
+            
+            // Check if ONNX model file exists
+            if (!std::filesystem::exists(model_path)) {
+                std::cerr << "ONNX model file not found at: " << model_path << std::endl;
+                std::cerr << "Trying alternative path..." << std::endl;
+                
+                model_path = "models/DeepTrader_LSTM/DeepTrader_LSTM.onnx";
+                if (!std::filesystem::exists(model_path)) {
+                    std::cerr << "ONNX model file not found at alternative path either." << std::endl;
+                    return;
+                }
+            }
+            
+            std::cout << "Loading ONNX model from: " << model_path << std::endl;
+            
+            // Set graph optimisation level to apply optimisation to NN computation graph for improved inference performance
+            session_options.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
+            
+            // Create session - runtime env to load NNm odel and provide method to execute predictions with
+            ort_session = std::make_unique<Ort::Session>(ort_env, model_path.c_str(), session_options);
+            
+            // Load normalisation parameters from JSON file
+            std::string norm_path = std::filesystem::path(model_path).parent_path() / "normalisation_values.json";
+            loadNormalisationValues(norm_path);
+            
+            std::cout << "ONNX model loaded successfully" << std::endl;
         }
-        // Parent process continues
-    }
-    
-    // Tests connection to Python server by creating a new TCP socket and attempting to connect to the server
-    bool testServerConnection() {
-
-        // Try to connect to server
-        int sock = socket(AF_INET, SOCK_STREAM, 0);
-        if (sock < 0) return false;
-        
-        // Prepare socket address structure
-        struct sockaddr_in serv_addr;
-        memset(&serv_addr, 0, sizeof(serv_addr));
-        serv_addr.sin_family = AF_INET;
-        serv_addr.sin_port = htons(python_server_port_);
-        inet_pton(AF_INET, python_server_host_.c_str(), &serv_addr.sin_addr);
-
-        // Return false if connection fails
-        if (::connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-            close(sock);
-            return false;
+        catch (const Ort::Exception& e) {
+            std::cerr << "ONNX Runtime error: " << e.what() << std::endl;
         }
-        
-        // Close socket and return true if connection is successful
-        close(sock);
-        return true;
+        catch (const std::exception& e) {
+            std::cerr << "Error initialising model: " << e.what() << std::endl;
+        }
     }
     
-    // Predicts the price using the LSTM model by sending a JSON request to the Python server and receiving a JSON response of the predicteed price (then adjusted based on limit price constraints)
+    void loadNormalisationValues(const std::string& file_path) {
+        try {
+            // If the sation file doesn't exist, use default values
+            if (!std::filesystem::exists(file_path)) {
+                std::cerr << "Normalisation file not found: " << file_path << std::endl;
+                std::cerr << "Using default normalisation values" << std::endl;
+                
+                // Create default values (14 features including the output - min = 0, max = 1; default)
+                min_values.resize(14, 0.0f);
+                max_values.resize(14, 1.0f);
+                return;
+            }
+            
+            // Read the JSON file min/max values
+            std::ifstream norm_file(file_path);
+            json norm_data;
+            norm_file >> norm_data;
+            
+            // Extract the min and max values
+            min_values = norm_data["min_values"].get<std::vector<float>>();
+            max_values = norm_data["max_values"].get<std::vector<float>>();
+            
+            std::cout << "Loaded normalisation values: min size=" << min_values.size() 
+                      << ", max size=" << max_values.size() << std::endl;
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error loading normalisation values: " << e.what() << std::endl;
+            // Set default values
+            min_values.resize(14, 0.0f);
+            max_values.resize(14, 1.0f);
+        }
+    }
+    
+    bool testModelInitialisation() {
+        // Simple test to check if model is initialised
+        return ort_session != nullptr && min_values.size() > 0 && max_values.size() > 0;
+    }
+    
     double predictPrice(MarketDataMessagePtr msg, Order::Side side) {
-
         std::string otype = (side == Order::Side::BID) ? "Bid" : "Ask";
         double best_bid = msg->data->best_bid;
         double best_ask = msg->data->best_ask;
-
-        // If Python server isn't available, use fallback
-        if (!py_initialized_) {
-            return otype == "Ask" ? best_ask : best_bid;
+        
+        // Create log file for predictions DEBUG
+        std::ofstream prediction_log("./logs/deeptrader_predictions.log", std::ios::app);
+        prediction_log << "\n--- New Prediction Request ---" << std::endl;
+        prediction_log << "Timestamp: " << std::time(nullptr) << std::endl;
+        prediction_log << "Order Type: " << otype << std::endl;
+        prediction_log << "Market Data - Best Bid: " << best_bid << ", Best Ask: " << best_ask << std::endl;
+    
+        // If model isn't available, use fallback
+        if (!model_initialised_ || !ort_session) {
+            prediction_log << "Model not initialised, using fallback price" << std::endl;
+            double fallback_price = otype == "Ask" ? best_ask : best_bid;
+            prediction_log << "Fallback Price: " << fallback_price << std::endl;
+            prediction_log.close();
+            return fallback_price;
         }
         
         try {
-            // Connect to Python server
-            int sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (sock < 0) {
-                throw std::runtime_error("Socket creation failed");
-            }
-            
-            struct sockaddr_in serv_addr;
-            memset(&serv_addr, 0, sizeof(serv_addr));
-            serv_addr.sin_family = AF_INET;
-            serv_addr.sin_port = htons(python_server_port_);
-            inet_pton(AF_INET, python_server_host_.c_str(), &serv_addr.sin_addr);
-            
-            if (::connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr)) < 0) {
-                close(sock);
-                throw std::runtime_error("Connection to Python server failed");
-            }
-            
-            // Prepare JSON request
-            json request = {
-                {"type", "predict"},
-                {"timestamp", msg->data->timestamp},
-                {"time_diff", msg->data->time_diff},
-                {"side", (otype == "Bid" ? 1 : 0)},
-                {"best_bid", msg->data->best_bid},
-                {"best_ask", msg->data->best_ask},
-                {"micro_price", msg->data->micro_price},
-                {"mid_price", msg->data->mid_price},
-                {"imbalance", msg->data->imbalance},
-                {"spread", msg->data->spread},
-                {"total_volume", msg->data->total_volume},
-                {"p_equilibrium", msg->data->p_equilibrium},
-                {"smiths_alpha", msg->data->smiths_alpha},
-                {"limit_price", limit_price_}  // Add the limit price
+            // Create input feature array (13 features like in the Python version)
+            std::vector<float> features = {
+                static_cast<float>(msg->data->timestamp),
+                static_cast<float>(msg->data->time_diff),
+                side == Order::Side::BID ? 1.0f : 0.0f,
+                static_cast<float>(msg->data->best_bid),
+                static_cast<float>(msg->data->best_ask),
+                static_cast<float>(msg->data->micro_price),
+                static_cast<float>(msg->data->mid_price),
+                static_cast<float>(msg->data->imbalance),
+                static_cast<float>(msg->data->spread),
+                static_cast<float>(msg->data->total_volume),
+                static_cast<float>(msg->data->p_equilibrium),
+                static_cast<float>(msg->data->smiths_alpha),
+                static_cast<float>(limit_price_)
             };
             
-            std::string request_str = request.dump();
-            send(sock, request_str.c_str(), request_str.size(), 0);
+            // Log raw features DEBUG
+            prediction_log << "\nRaw Features:" << std::endl;
+            prediction_log << "timestamp: " << features[0] << std::endl;
+            prediction_log << "time_diff: " << features[1] << std::endl;
+            prediction_log << "is_bid: " << features[2] << std::endl;
+            prediction_log << "best_bid: " << features[3] << std::endl;
+            prediction_log << "best_ask: " << features[4] << std::endl;
+            prediction_log << "micro_price: " << features[5] << std::endl;
+            prediction_log << "mid_price: " << features[6] << std::endl;
+            prediction_log << "imbalance: " << features[7] << std::endl;
+            prediction_log << "spread: " << features[8] << std::endl;
+            prediction_log << "total_volume: " << features[9] << std::endl;
+            prediction_log << "p_equilibrium: " << features[10] << std::endl;
+            prediction_log << "smiths_alpha: " << features[11] << std::endl;
+            prediction_log << "limit_price: " << features[12] << std::endl;
             
-            // Receive response
-            char buffer[4096] = {0};
-            int valread = read(sock, buffer, 4096);
+            // Store original features for logging
+            std::vector<float> original_features = features;
             
-            close(sock);
-            
-            if (valread <= 0) {
-                throw std::runtime_error("Failed to read from server");
+            // Normalise features
+            for (size_t i = 0; i < features.size(); i++) {
+                if (i < min_values.size() && i < max_values.size()) {
+                    features[i] = (features[i] - min_values[i]) / (max_values[i] - min_values[i]);
+                }
             }
             
-            // Parse response
-            json response = json::parse(buffer);
-            if (response["status"] == "success") {
-                return response["price"];
-            } 
-            else {
-                std::cerr << "Prediction error: " << response["error"] << std::endl;
-                // Fallback
-                return otype == "Ask" ? best_ask : best_bid;
+            // Log normalised features
+            prediction_log << "\nNormalised Features:" << std::endl;
+            for (size_t i = 0; i < features.size(); i++) {
+                prediction_log << "Feature " << i << ": " << features[i] << " (original: " << original_features[i] 
+                               << ", min: " << min_values[i] << ", max: " << max_values[i] << ")" << std::endl;
             }
+            
+            // Prepare input tensor
+            std::vector<int64_t> input_shape = {1, 1, 13}; // [batch_size, sequence_length, features]
+            
+            // Define I/O names for the model for memory allocation utilities so NN uses CPU memory with default allocation settings
+            // INPUT = market data features fed into NN. OUTPUT = price prediction NN returns
+            Ort::AllocatorWithDefaultOptions allocator;
+            Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+
+            /** Expected INPUT and OUTPUT names in log - DEBUG; 
+             * Input Tensor name = "input" index 0. Name of input tensor #0 is input
+             * Output Tensor name = "dense_2". Name of output tensor #0 is dense_2; last layer of keras model
+             */
+
+
+            // Get input names to identify input tensors in ONNX model; symbolic labels to match input data with correct nodes in NN computational graph 
+            // Computational Graph = underlying structure of NN to define how data flows through nodes
+            size_t num_input_nodes = ort_session->GetInputCount();
+            std::vector<std::string> input_names_str;
+            std::vector<const char*> input_names;
+            for (size_t i = 0; i < num_input_nodes; i++) {
+                Ort::AllocatedStringPtr input_name = ort_session->GetInputNameAllocated(i, allocator);
+                input_names_str.push_back(input_name.get());
+                input_names.push_back(input_names_str.back().c_str());
+                prediction_log << "Input " << i << " name: " << input_names[i] << std::endl; 
+            }
+
+            // Get output names; Identifies output tensors in ONNX model; symbolic labels to access prediction results from NN after inference is complete
+            size_t num_output_nodes = ort_session->GetOutputCount();
+            std::vector<std::string> output_names_str;
+            std::vector<const char*> output_names;
+            for (size_t i = 0; i < num_output_nodes; i++) {
+                Ort::AllocatedStringPtr output_name = ort_session->GetOutputNameAllocated(i, allocator);
+                output_names_str.push_back(output_name.get());
+                output_names.push_back(output_names_str.back().c_str());
+                prediction_log << "Output " << i << " name: " << output_names[i] << std::endl;
+            }
+            
+            prediction_log << "\nRunning ONNX model inference..." << std::endl;
+            
+            // Create input tensor
+            auto input_tensor = Ort::Value::CreateTensor<float>(
+                memory_info, features.data(), features.size(), 
+                input_shape.data(), input_shape.size()
+            );
+            
+            // Run inference (prediction)
+            auto output_tensors = ort_session->Run(
+                Ort::RunOptions{nullptr}, 
+                input_names.data(), 
+                &input_tensor, 
+                1, 
+                output_names.data(), 
+                1
+            );
+            
+            // Get output tensor and value
+            float* output_data = output_tensors[0].GetTensorMutableData<float>();
+            float normalised_output = output_data[0];
+            
+            prediction_log << "Model output (normalised): " << normalised_output << std::endl;
+            
+            // Denormalise output
+            float denormalised_output = 0.0f;
+            if (min_values.size() > 13 && max_values.size() > 13) {
+                denormalised_output = (normalised_output * (max_values[13] - min_values[13])) + min_values[13];
+                prediction_log << "Denormalised output: " << denormalised_output 
+                               << " (using min: " << min_values[13] << ", max: " << max_values[13] << ")" << std::endl;
+            } else {
+                // Fallback if normalisation values are not available
+                denormalised_output = normalised_output * 200.0f; // Assuming output is in range [0,1] and price in [0,200]
+                prediction_log << "Denormalised output: " << denormalised_output 
+                               << " (using fallback scaling factor: 200.0)" << std::endl;
+            }
+            
+            // Round to nearest integer
+            int model_price = static_cast<int>(std::round(denormalised_output));
+            prediction_log << "Rounded model price: " << model_price << std::endl;
+            
+            // Apply sanity checks as in the Python code
+            if (model_price < 50 || model_price > 200) {
+                prediction_log << "Warning: Unreasonable prediction: " << model_price << ", using fallback" << std::endl;
+                if (otype == "Ask") {
+                    model_price = best_ask - 1;
+                    prediction_log << "Fallback to best_ask - 1: " << model_price << std::endl;
+                } else {
+                    model_price = best_bid + 1;
+                    prediction_log << "Fallback to best_bid + 1: " << model_price << std::endl;
+                }
+            }
+            
+            prediction_log << "Final model prediction: " << model_price << " for " << otype << std::endl;
+            prediction_log.close();
+            
+            std::cout << "ONNX model prediction: " << model_price << " for " << otype << std::endl;
+            return model_price;
+        }
+        catch (const Ort::Exception& e) {
+            prediction_log << "ONNX Runtime error in predictPrice: " << e.what() << std::endl;
+            // Fallback to simple price
+            double fallback_price = otype == "Ask" ? best_ask : best_bid;
+            prediction_log << "Using fallback price: " << fallback_price << std::endl;
+            prediction_log.close();
+            
+            std::cerr << "ONNX Runtime error in predictPrice: " << e.what() << std::endl;
+            return fallback_price;
         }
         catch (const std::exception& e) {
-            std::cerr << "Error in predictPrice: " << e.what() << std::endl;
+            prediction_log << "Error in predictPrice: " << e.what() << std::endl;
             // Fallback
-            return otype == "Ask" ? best_ask : best_bid;
+            double fallback_price = otype == "Ask" ? best_ask : best_bid;
+            prediction_log << "Using fallback price: " << fallback_price << std::endl;
+            prediction_log.close();
+            
+            std::cerr << "Error in predictPrice: " << e.what() << std::endl;
+            return fallback_price;
         }
     }
     
@@ -337,12 +464,9 @@ private:
     std::string ticker_;
     Order::Side trader_side_;
     double limit_price_;
-    std::string python_server_host_;
-    int python_server_port_;
-    pid_t server_pid_ = -1;
     
     bool is_trading_ = false;
-    bool py_initialized_ = false;
+    bool model_initialised_ = false;
     
     // Order management
     std::mutex mutex_;
@@ -351,7 +475,7 @@ private:
     int next_order_id_ = 1;
 
     std::stack<CustomerOrderMessagePtr> customer_orders_;
-    std::mt19937 random_generator_;
+    std::mt19937 random_generator_{std::random_device{}()};
 };
 
 #endif
