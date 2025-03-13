@@ -17,6 +17,8 @@ from tensorflow.keras.layers import LSTM, Dense
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.metrics import MeanAbsoluteError, MeanSquaredLogarithmicError
+from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
+
 
 from data_generator import DeepTraderDataGenerator, BATCHSIZE, NUMBER_OF_FEATURES, NUMBER_OF_STEPS
 
@@ -34,19 +36,17 @@ class DeepTraderLSTM:
         self.model = Sequential()
 
         # LSTM layer - expects input shape (batch_size, features)
-        self.model.add( 
-            LSTM( 
-                10, # Number of LSTM units
-                activation="relu", # Activation function
-                input_shape=(input_shape[1], input_shape[2]),  # (time_steps, features)
-                unroll = True, 
+        self.model.add(
+            LSTM(
+                10,
+                activation="relu",
+                input_shape=(input_shape[1], input_shape[2]),
+                unroll=True,
             )
         )
-
-        # Dense layers 
         self.model.add(Dense(5, activation="relu"))
         self.model.add(Dense(3, activation="relu"))
-        self.model.add(Dense(1)) 
+        self.model.add(Dense(1))
 
         # Compile the model 
         optimiser = Adam(learning_rate=1.5e-5)
@@ -70,7 +70,7 @@ class DeepTraderLSTM:
         history = self.model.fit(
             data_generator,
             epochs=epochs,
-            verbose=1
+            verbose=1, 
         )
 
         # Save training historu 
@@ -123,16 +123,32 @@ class DeepTraderLSTM:
         plt.show() 
 
 def main(): 
-
-    """ Main function to train and save the LSTM model. """
-
     # Define model input shape: (batch_size, time_steps, features)
     input_shape = (BATCHSIZE, NUMBER_OF_STEPS, NUMBER_OF_FEATURES)
 
     # Create data generator
     data_path = "normalised_data/normalised_data.pkl"
     data_generator = DeepTraderDataGenerator(data_path)
-
+    
+    # Print a sample of training data
+    print("Printing a sample of the training data:")
+    x_batch, y_batch = data_generator[0]  # Get the first batch
+    
+    # Print statistics about the target values
+    print(f"Target value statistics:")
+    print(f"Mean: {np.mean(y_batch)}")
+    print(f"Std: {np.std(y_batch)}")
+    print(f"Min: {np.min(y_batch)}")
+    print(f"Max: {np.max(y_batch)}")
+    
+    # Print a few examples
+    print("\nFeature examples (first 3 samples):")
+    for i in range(3):
+        print(f"Sample {i+1}:")
+        for step in range(NUMBER_OF_STEPS):
+            print(f"  Step {step+1}: {x_batch[i, step]}")
+        print(f"  Target: {y_batch[i, 0]}")
+    
     # Create and train the LSTM model 
     lstm_model = DeepTraderLSTM(input_shape)
     history = lstm_model.train(data_generator, epochs=20)
@@ -142,7 +158,6 @@ def main():
     lstm_model.plot_training_history()
 
     print("Model training complete.")
-
 if __name__ == "__main__":
     main()
 

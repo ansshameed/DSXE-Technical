@@ -371,7 +371,7 @@ MarketDataPtr OrderBook::getLiveMarketData(Order::Side aggressing_side)
     data->cumulative_volume_traded = trade_volume_;
     data->trades_count = trade_count_;
 
-    data->timestamp = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    data->timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
 
     // Additionals for DT 
     data->mid_price = calculateMidPrice();

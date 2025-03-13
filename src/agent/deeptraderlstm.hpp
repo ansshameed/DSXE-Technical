@@ -43,17 +43,14 @@ public:
         py_initialized_ = testServerConnection();
         init_log << "Python server connection test: " << (py_initialized_ ? "SUCCESS" : "FAILED") << std::endl;
         
-        // Mark as legacy agent (non-technical agent)
+        // No delayed start for deep trader
         is_legacy_trader_ = true;
         
         // Connect to exchange
         TraderAgent::connect(config->exchange_addr, config->exchange_name, [=, this](){
             TraderAgent::subscribeToMarket(config->exchange_name, config->ticker);
         });
-        
-        // Add delayed start
-        TraderAgent::addDelayedStart(config->delay);
-        
+    
         init_log << "DeepTrader initialisation complete" << std::endl;
         init_log.close();
     }
@@ -81,48 +78,76 @@ public:
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
     {
-        if (!is_trading_ || pending_orders_.empty()) {
+
+        if (!is_trading_) {
             return;
         }
         
-        std::lock_guard<std::mutex> lock(mutex_);
+        // Generate random quantity for orders (similar to TraderShaver)
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
         
-        // Process the first pending order
-        auto order_id = pending_orders_.front();
-        pending_orders_.pop();
-        
-        auto& order = orders_map_[order_id];
-        limit_price_ = order.price; // Set the current limit price to the incoming order price
-
-        double best_bid = msg->data->best_bid;
-        double best_ask = msg->data->best_ask;
-        
-        // Get predicted price using LSTM (timestamp, best bid, best ask, volume and order type - BID/ASK)
-        double model_price = predictPrice(msg);
-        
-        // Apply the same price adjustments as in the original implementation (DeepTraderX)
-        if (order.otype == "Ask") {
-            if (model_price < limit_price_) { // Adjust price if needed (if predicted model price is less than limit price)
-                model_price = limit_price_ + 1; // Ensure price is at least 1 above limit
-                if (best_ask > 0 && limit_price_ < best_ask - 1) { // If best ask is available and limit price is less than best ask - 1
-                    model_price = best_ask - 1; // Shaver mechanism
+        // If we have customer orders, use those; otherwise use default values
+        if (!customer_orders_.empty()) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            auto cust_order = customer_orders_.top();
+            customer_orders_.pop();
+            
+            // Create an order based on the customer order
+            Order::Side side = cust_order->side;
+            limit_price_ = cust_order->price;
+            
+            // Get predicted price using LSTM
+            double model_price = predictPrice(msg, side);
+            
+            // Apply price adjustments
+            if (side == Order::Side::ASK) {
+                if (model_price < limit_price_) {
+                    model_price = limit_price_ + 1;
+                    if (msg->data->best_ask > 0 && limit_price_ < msg->data->best_ask - 1) {
+                        model_price = msg->data->best_ask - 1;
+                    }
+                }
+            } else { // BID
+                if (model_price > limit_price_) {
+                    model_price = limit_price_ - 1;
+                    if (msg->data->best_bid > 0 && limit_price_ > msg->data->best_bid + 1) {
+                        model_price = msg->data->best_bid + 1;
+                    }
                 }
             }
+            
+            // Place the order
+            placeLimitOrder(exchange_, side, ticker_, cust_order->quantity, model_price, limit_price_);
+            std::cout << "DeepTrader (customer): " << (side == Order::Side::BID ? "BID" : "ASK") 
+                      << " " << cust_order->quantity << " @ " << model_price << " (limit: " << limit_price_ << ")\n";
         } 
-        else { // Bid
-            if (model_price > limit_price_) { // Adjust price if needed
-                model_price = limit_price_ - 1;
-                if (best_bid > 0 && limit_price_ > best_bid + 1) {
-                    model_price = best_bid + 1; // Shaver mechanism
+        else {
+            // No customer orders, use default settings similar to TraderShaver
+            double model_price = predictPrice(msg, trader_side_);
+            
+            // Apply price adjustments
+            if (trader_side_ == Order::Side::ASK) {
+                if (model_price < limit_price_) {
+                    model_price = limit_price_ + 1;
+                    if (msg->data->best_ask > 0 && limit_price_ < msg->data->best_ask - 1) {
+                        model_price = msg->data->best_ask - 1;
+                    }
+                }
+            } else { // BID
+                if (model_price > limit_price_) {
+                    model_price = limit_price_ - 1;
+                    if (msg->data->best_bid > 0 && limit_price_ > msg->data->best_bid + 1) {
+                        model_price = msg->data->best_bid + 1;
+                    }
                 }
             }
+            
+            // Place the order
+            placeLimitOrder(exchange_, trader_side_, ticker_, quantity, model_price, limit_price_);
+            std::cout << "DeepTrader (default): " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
+                      << " " << quantity << " @ " << model_price << " (limit: " << limit_price_ << ")\n";
         }
-        
-        // Place the limit order with the adjusted price
-        Order::Side side = (order.otype == "Ask") ? Order::Side::ASK : Order::Side::BID;
-        placeLimitOrder(exchange_, side, ticker_, order.qty, model_price, order.price);
-        
-        std::cout << "DeepTrader: " << order.otype << " " << order.qty << " @ " << model_price << " (limit: " << order.price << ")\n";
     }
 
     void onExecutionReport(std::string_view exchange, ExecutionReportMessagePtr msg) override
@@ -152,18 +177,8 @@ public:
             if (cust_msg) 
             { 
                 std::lock_guard<std::mutex> lock(mutex_);
-                
-                // Create an internal order record
-                int order_id = next_order_id_++;
-                OrderInfo order;
-                order.price = cust_msg->price; // Assigned to Deep Trader's limit price
-                order.qty = cust_msg->quantity;
-                order.otype = (cust_msg->side == Order::Side::BID) ? "Bid" : "Ask";
-                
-                // Store the order in our map and queue it for processing
-                orders_map_[order_id] = order;
-                pending_orders_.push(order_id);
-                
+                // Use a stack like TraderShaver
+                customer_orders_.push(cust_msg);
                 std::cout << "[DEEP] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
             }
             return;
@@ -240,11 +255,9 @@ private:
     }
     
     // Predicts the price using the LSTM model by sending a JSON request to the Python server and receiving a JSON response of the predicteed price (then adjusted based on limit price constraints)
-    double predictPrice(MarketDataMessagePtr msg) {
-        
-        auto& order = orders_map_[pending_orders_.front()];
-        std::string otype = order.otype;
+    double predictPrice(MarketDataMessagePtr msg, Order::Side side) {
 
+        std::string otype = (side == Order::Side::BID) ? "Bid" : "Ask";
         double best_bid = msg->data->best_bid;
         double best_ask = msg->data->best_ask;
 
@@ -276,7 +289,7 @@ private:
                 {"type", "predict"},
                 {"timestamp", msg->data->timestamp},
                 {"time_diff", msg->data->time_diff},
-                {"side", (otype == "Ask" ? 1 : 0)},
+                {"side", (otype == "Bid" ? 1 : 0)},
                 {"best_bid", msg->data->best_bid},
                 {"best_ask", msg->data->best_ask},
                 {"micro_price", msg->data->micro_price},
@@ -336,6 +349,9 @@ private:
     std::map<int, OrderInfo> orders_map_;
     std::queue<int> pending_orders_;
     int next_order_id_ = 1;
+
+    std::stack<CustomerOrderMessagePtr> customer_orders_;
+    std::mt19937 random_generator_;
 };
 
 #endif

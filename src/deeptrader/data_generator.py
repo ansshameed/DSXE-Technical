@@ -21,7 +21,7 @@ import os
 # Constants
 BATCHSIZE = 512  # (Change this back to 16384 once we have all the data). Number of LOB snapshots processed simulataneously through NN during each training step
 NUMBER_OF_FEATURES = 13  # First 13 columns are features
-NUMBER_OF_STEPS = 5      # For LSTM sequence length; treating each snapshot as independent datapoint without considering relationship to previous snapshots. If value e.g. 10 LSTM would be fed sequences of 10 snapshots to predict next value; learn temporal patterns in the market data for predictions. 5 = 5 consecutive lob snapshots to learn temporal patterns
+NUMBER_OF_STEPS = 1      # For LSTM sequence length; treating each snapshot as independent datapoint without considering relationship to previous snapshots. If value e.g. 10 LSTM would be fed sequences of 10 snapshots to predict next value; learn temporal patterns in the market data for predictions. 5 = 5 consecutive lob snapshots to learn temporal patterns
 
 
 class DeepTraderDataGenerator(Sequence):
@@ -77,7 +77,6 @@ class DeepTraderDataGenerator(Sequence):
         return self.seq_items // self.batch_size
 
     def __getitem__(self, index):
-
         """Generate one batch of data."""
         # Calculate start and end indices for this batch
         start_idx = index * self.batch_size
@@ -106,8 +105,12 @@ class DeepTraderDataGenerator(Sequence):
             for step in range(self.n_steps):
                 x[i, step] = all_data[seq_start + step][:self.n_features]
             
-            # Target is the next value after the sequence
-            y[i, 0] = all_data[seq_start + self.n_steps - 1][self.n_features]
+            # Target is the value that comes AFTER the sequence
+            if seq_start + self.n_steps < len(all_data):
+                y[i, 0] = all_data[seq_start + self.n_steps][self.n_features]
+            else:
+                # If we're at the end of the dataset, use the last value
+                y[i, 0] = all_data[seq_start + self.n_steps - 1][self.n_features]
         
         return x, y
 

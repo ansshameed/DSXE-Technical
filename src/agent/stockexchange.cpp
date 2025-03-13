@@ -439,10 +439,12 @@ void StockExchange::executeTrade(LimitOrderPtr resting_order, OrderPtr aggressin
         ); 
 
         addLOBSnapshot(lob_data);
-    }
+    } 
 
     publishMarketData(resting_order->ticker, aggressing_order->side);
+
 }
+
 
 void StockExchange::sendExecutionReport(std::string_view trader, ExecutionReportMessagePtr msg)
 {
@@ -454,7 +456,7 @@ std::optional<MessagePtr> StockExchange::handleMessageFrom(std::string_view send
     switch (message->type)
     {
         case MessageType::SUBSCRIBE:
-        {
+        { 
             SubscribeMessagePtr msg = std::dynamic_pointer_cast<SubscribeMessage>(message);
             if (msg == nullptr) {
                 throw std::runtime_error("Failed to cast message to SubscribeMessage");
@@ -682,13 +684,32 @@ void StockExchange::publishMarketData(std::string_view ticker, Order::Side aggre
         std::cout << "No market data available for " << ticker << "\n";
         return;
     }
+
+    // Always ensure the timestamps are proper millisecond values relative to session start
+    auto now = std::chrono::high_resolution_clock::now();
+    double elapsed_time = std::chrono::duration<double, std::milli>(now - trading_session_start_time_).count();
+    
+    // Time difference between current event and last trade for this ticker
+    double time_diff = 0.0;
+    if (last_trade_time_.find(std::string(ticker)) != last_trade_time_.end()) {
+        time_diff = std::chrono::duration<double, std::milli>(now - last_trade_time_[std::string(ticker)]).count();
+    }
+    
+    // Ensure timestamps are always properly set
+    data->timestamp = static_cast<unsigned long long>(elapsed_time);
+    data->time_diff = static_cast<unsigned long long>(time_diff);
+    
+    // Update other derived values
+    data->p_equilibrium = calculatePEquilibrium(ticker);
+    data->smiths_alpha = calculateSmithsAlpha(ticker);
+    
     addMarketDataSnapshot(data); // Existing market data snapshot (data_ files)
     MarketDataMessagePtr msg = std::make_shared<MarketDataMessage>();
     msg->data = data;
 
     // Send message to all subscribers of the given ticker 
     broadcastToSubscribers(ticker, std::dynamic_pointer_cast<Message>(msg));
-};
+}; 
 
 void StockExchange::setTradingWindow(int connect_time, int trading_time)
 {

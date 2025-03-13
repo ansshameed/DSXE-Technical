@@ -130,7 +130,8 @@ def handle_client(client_socket):
                 # Use the provided values directly instead of recalculating
                 time = request.get('timestamp', 0)
                 time_diff = request.get('time_diff', 0)
-                side = request.get('trade_type', 1 if order_type == "Ask" else 0)
+                side = request.get('side', 0)  
+                order_type_str = "Bid" if side == 1 else "Ask"
                 best_bid = request.get('best_bid', 0)
                 best_ask = request.get('best_ask', 0)
                 micro_price = request.get('micro_price', 0)
@@ -179,7 +180,7 @@ def handle_client(client_socket):
                 print(f"Normalized output: {normalized_output}, Denormalized: {denormalized_output}, Final: {model_price}")
                 
                 # Apply the same price adjustments as the original implementation
-                if order_type == "Ask":
+                if order_type_str == "Ask":
                     if model_price < limit_price:
                         model_price = limit_price + 1
                         if limit_price < best_ask - 1:
@@ -193,13 +194,13 @@ def handle_client(client_socket):
                 # Add sanity check
                 if model_price < 50 or model_price > 200:
                     print(f"Warning: Unreasonable prediction: {model_price}, using fallback")
-                    if order_type == "Ask":
+                    if order_type_str == "Ask":
                         model_price = best_ask - 1
                     else:
                         model_price = best_bid + 1
                 
                 final_price = model_price
-                print(f"Final prediction: {final_price} for {order_type}")
+                print(f"Final prediction: {final_price} for {order_type_str}")
                 
                 # Send response
                 response = {
@@ -210,7 +211,7 @@ def handle_client(client_socket):
             except Exception as e:
                 print(f"Prediction error: {e}")
                 # Fallback as before
-                if order_type == 'Ask':
+                if order_type_str == 'Ask':
                     price = max(request['best_bid'] + 1, request['best_ask'] - 1)
                 else:
                     price = min(request['best_ask'] - 1, request['best_bid'] + 1)

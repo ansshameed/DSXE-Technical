@@ -49,6 +49,7 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
         double total_volume;
         double p_equilibrium;
         double smiths_alpha;
+        double limit_price; 
 
         std::string describeCSVHeaders() const override
         {
@@ -119,6 +120,7 @@ class MarketData : public CSVPrintable, std::enable_shared_from_this<MarketData>
             ar & total_volume;
             ar & p_equilibrium;
             ar & smiths_alpha; 
+            ar & limit_price; 
         }
 };
 
