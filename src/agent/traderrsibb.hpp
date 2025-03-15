@@ -142,7 +142,28 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (rsi_prices_.size() >= lookback_rsi_ && bb_prices_.size() >= lookback_bb_) 
+                
+                // Process any pending customer orders
+                if (!customer_orders_.empty())
+                {
+                    // If we have enough data, use RSI+BB strategy with customer order parameters
+                    if (rsi_prices_.size() >= lookback_rsi_ && bb_prices_.size() >= lookback_bb_) 
+                    { 
+                        double rsi = calculateRSI(rsi_prices_); 
+                        double sma = calculateSMA(bb_prices_);
+                        double std_dev = calculateStandardDeviation(bb_prices_, sma);
+                        double upper_band = sma + (std_dev_multiplier_ * std_dev);
+                        double lower_band = sma - (std_dev_multiplier_ * std_dev);
+                        placeOrder(rsi, upper_band, lower_band);
+                    }
+                    // Else directly process customer orders to bootstrap market data
+                    else
+                    {
+                        processCustomerOrder();
+                    }
+                }
+                // Normal RSI+BB strategy for regular trading
+                else if (rsi_prices_.size() >= lookback_rsi_ && bb_prices_.size() >= lookback_bb_) 
                 { 
                     double rsi = calculateRSI(rsi_prices_); 
                     double sma = calculateSMA(bb_prices_);
@@ -150,20 +171,33 @@ private:
                     double upper_band = sma + (std_dev_multiplier_ * std_dev);
                     double lower_band = sma - (std_dev_multiplier_ * std_dev);
                     placeOrder(rsi, upper_band, lower_band);
-
                 }
-
                 else 
                 { 
-                    std::cout << "Not enough data for RSI calculation. Using default RSI: 50.0\n";
+                    std::cout << "Not enough data for RSI+BB calculation.\n";
                 } 
-
+    
                 sleep();
                 lock.lock();
             }
             lock.unlock();
             std::cout << "Finished actively trading.\n";
         });
+    }
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order (Bootstrap): " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
     }
 
     void reactToMarket(MarketDataMessagePtr msg)

@@ -142,12 +142,35 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (price_volume_data_.size() >= lookback_vwap_ && close_prices_.size() >= lookback_obv_)
+                
+                // Process any pending customer orders
+                if (!customer_orders_.empty())
+                {
+                    // If we have enough data, use OBV+VWAP strategy with customer order parameters
+                    if (price_volume_data_.size() >= lookback_vwap_ && close_prices_.size() >= lookback_obv_)
+                    {
+                        double rolling_vwap = calculateVWAP(price_volume_data_);
+                        std::vector<double> delta_obv_values = calculateOBVDelta();
+                        placeOrder(delta_obv_values.back(), rolling_vwap);
+                    }
+                    // Else directly process customer orders to bootstrap market data
+                    else
+                    {
+                        processCustomerOrder();
+                    }
+                }
+                // Normal OBV+VWAP strategy for regular trading
+                else if (price_volume_data_.size() >= lookback_vwap_ && close_prices_.size() >= lookback_obv_)
                 {
                     double rolling_vwap = calculateVWAP(price_volume_data_);
                     std::vector<double> delta_obv_values = calculateOBVDelta();
                     placeOrder(delta_obv_values.back(), rolling_vwap);
-                } 
+                }
+                else
+                {
+                    std::cout << "Not enough market data for OBV+VWAP calculation.\n";
+                }
+                
                 sleep();
                 lock.lock();
             }
@@ -155,6 +178,22 @@ private:
             std::cout << "Finished actively trading.\n";
         });
     }
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order (Bootstrap): " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
+    }
+
 
     void reactToMarket(MarketDataMessagePtr msg)
     {

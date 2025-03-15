@@ -144,7 +144,39 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (closing_prices_.size() >= lookback_)
+                
+                // Process any pending customer orders
+                if (!customer_orders_.empty())
+                {
+                    if (closing_prices_.size() >= lookback_)
+                    { 
+                        // If we have enough data, use RSI strategy with customer order parameters
+                        double rsi = calculateRSI(closing_prices_);
+                        std::cout << "RSI: " << rsi << "\n";
+
+                        double stoch_rsi = 50.0; // Neutral value.
+                        if (use_stoch_rsi_)
+                        { 
+                            if (rsi_values_.size() >= stoch_lookback_)
+                            { 
+                                stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_);
+                                std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
+                            }
+                            else
+                            {
+                                std::cout << "Not enough RSI values for StochRSI calculation.\n";
+                            }
+                        }
+                        placeOrder(rsi, stoch_rsi);
+                    }
+                    // Else directly process customer orders to bootstrap market data
+                    else
+                    {
+                        processCustomerOrder();
+                    }
+                }
+                // Normal RSI strategy for regular trading
+                else if (closing_prices_.size() >= lookback_)
                 { 
                     double rsi = calculateRSI(closing_prices_);
                     std::cout << "RSI: " << rsi << "\n";
@@ -154,29 +186,42 @@ private:
                     { 
                         if (rsi_values_.size() >= stoch_lookback_)
                         { 
-                            double stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_);
+                            stoch_rsi = calculateStochRSI(rsi_values_, stoch_lookback_, n_to_smooth_);
                             std::cout << "Stochastic RSI: " << stoch_rsi << "\n";
                         }
                         else
                         {
                             std::cout << "Not enough RSI values for StochRSI calculation.\n";
-                            sleep();
-                            lock.lock();
-                            continue;
                         }
                     }
-                    placeOrder(rsi, stoch_rsi); // Always call placeOrder 
+                    placeOrder(rsi, stoch_rsi);
                 }
                 else
                 {
                     std::cout << "Not enough closing prices for RSI calculation.\n";
                 }
+                
                 sleep();
                 lock.lock();
             }
             lock.unlock();
             std::cout << "Finished actively trading.\n";
         });
+    }
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order : " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
     }
 
     void reactToMarket(MarketDataMessagePtr msg)
@@ -220,7 +265,7 @@ private:
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
-            //trader_side_ = cust_order->side;
+            trader_side_ = cust_order->side;
         }
 
         std::uniform_int_distribution<int> dist(10, 50);  // Generates integers between 0 and 100

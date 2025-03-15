@@ -137,17 +137,54 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
-                if (close_prices_.size() >= lookback_length_ && volumes_.size() >= lookback_length_)
+                
+                // Process any pending customer orders
+                if (!customer_orders_.empty())
+                {
+                    // If we have enough data, use OBV Delta strategy with customer order parameters
+                    if (close_prices_.size() >= lookback_length_ && volumes_.size() >= lookback_length_)
+                    {
+                        std::vector<double> delta_obv_values = calculateOBVDelta();  
+                        placeOrder(delta_obv_values.back());
+                    }
+                    // Else directly process customer orders to bootstrap market data
+                    else
+                    {
+                        processCustomerOrder();
+                    }
+                }
+                // Normal OBV Delta strategy for regular trading
+                else if (close_prices_.size() >= lookback_length_ && volumes_.size() >= lookback_length_)
                 {
                     std::vector<double> delta_obv_values = calculateOBVDelta();  
                     placeOrder(delta_obv_values.back());
                 }
+                else
+                {
+                    std::cout << "Not enough market data for OBV Delta calculation.\n";
+                }
+                
                 sleep();
                 lock.lock();
             }
             lock.unlock();
             std::cout << "Finished actively trading.\n";
         });
+    }
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order (Bootstrap): " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
     }
 
     void reactToMarket(MarketDataMessagePtr msg)
@@ -308,7 +345,7 @@ private:
                 break;
             }
             // Use absolute delta for more trading opportunities
-            output[icase] = std::abs(output[icase] - output[icase - delta_length_]);
+            output[icase] = output[icase] - output[icase - delta_length_];
         }
 
         return output;

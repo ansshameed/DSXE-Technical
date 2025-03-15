@@ -143,7 +143,34 @@ private:
             {
                 lock.unlock();
 
-                if (prices_.size() >= lookback_period_) 
+                // Process any pending customer orders to initiate orders
+                if (!customer_orders_.empty())
+                {
+                    if (prices_.size() >= lookback_period_) 
+                    {
+                        // Compute MACD (and signal) on the local copy.
+                        auto [macd_line, signal_line] = calculateMACD(prices_);
+                        
+                        // Additional safety check
+                        if (!macd_line.empty() && !signal_line.empty())
+                        {
+                            double macd = macd_line.back();
+                            double signal = signal_line.back();
+                            double histogram = macd - signal;
+                            
+                            std::cout << "MACD: " << macd << ", Signal: " << signal << ", Histogram: " << histogram << ", Threshold: " << threshold_ << "\n";
+                            
+                            placeOrder(histogram, prices_.back());
+                        }
+                    }
+                    // Else directly process customer orders to bootstrap market data
+                    else
+                    {
+                        processCustomerOrder();
+                    }
+                }
+                // Apply normal strategy when enough data is available
+                else if (prices_.size() >= lookback_period_) 
                 {
                     // Compute MACD (and signal) on the local copy.
                     auto [macd_line, signal_line] = calculateMACD(prices_);
@@ -155,11 +182,7 @@ private:
                         double signal = signal_line.back();
                         double histogram = macd - signal;
                         
-                        std::cout << "MACD: " << macd 
-                                << ", Signal: " << signal 
-                                << ", Histogram: " << histogram 
-                                << ", Threshold: " << threshold_ 
-                                << "\n";
+                        std::cout << "MACD: " << macd << ", Signal: " << signal << ", Histogram: " << histogram << ", Threshold: " << threshold_ << "\n";
                         
                         placeOrder(histogram, prices_.back());
                     }
@@ -171,6 +194,21 @@ private:
             lock.unlock();
             std::cout << "Finished actively trading.\n";
         });
+    }
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order: " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
     }
 
     void placeOrder(double histogram, double last_price)
@@ -193,6 +231,7 @@ private:
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
+            trader_side_ = cust_order->side; 
         }
 
         double best_bid = last_market_data_.value()->best_bid;

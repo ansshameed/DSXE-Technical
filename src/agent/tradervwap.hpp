@@ -139,22 +139,53 @@ private:
             while (is_trading_)
             {
                 lock.unlock();
+                { 
+                    if (!customer_orders_.empty()) 
+                    { 
+                        // Check if we have at least 'lookback_' entries
+                        if (price_volume_data_.size() >= lookback_)
+                        {
+                            double rolling_vwap = calculateVWAP(price_volume_data_); 
+                            double last_price  = price_volume_data_.back().first;
+                            std::cout << "Calculated Rolling VWAP: " << rolling_vwap << " (Last price: " << last_price << ")\n";
+                            placeOrder(rolling_vwap, last_price);
+                        } 
 
-                // Check if we have at least 'lookback_' entries
-                if (price_volume_data_.size() >= lookback_)
-                {
-                    double rolling_vwap = calculateVWAP(price_volume_data_); 
-                    double last_price  = price_volume_data_.back().first;
-                    std::cout << "Calculated Rolling VWAP: " << rolling_vwap << " (Last price: " << last_price << ")\n";
-                    placeOrder(rolling_vwap, last_price);
+                        else 
+                        { 
+                            processCustomerOrder(); 
+                        }
+                    }
+
+                    else if (price_volume_data_.size() >= lookback_)
+                    { 
+                        double rolling_vwap = calculateVWAP(price_volume_data_); 
+                        double last_price  = price_volume_data_.back().first;
+                        std::cout << "Calculated Rolling VWAP: " << rolling_vwap << " (Last price: " << last_price << ")\n";
+                        placeOrder(rolling_vwap, last_price);
+                    }
                 } 
-
                 sleep();
                 lock.lock();
             }
             lock.unlock();
             std::cout << "Finished actively trading.\n";
         });
+    }
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order: " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
     }
 
     void placeOrder(double vwap_price, double last_price)
@@ -165,11 +196,17 @@ private:
             last_accepted_order_id_ = std::nullopt;
         }
 
+        if (!last_market_data_.has_value()) {
+            std::cout << "No market data available, skipping order placement.\n";
+            return;
+        }
+
         if (!customer_orders_.empty()) 
         {   
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
+            trader_side_ = cust_order->side; 
         }
 
         double best_bid = last_market_data_.value()->best_bid;
@@ -177,6 +214,7 @@ private:
         double last_price_traded = last_market_data_.value()->last_price_traded;
         std::uniform_int_distribution<int> dist(10, 50);  // Generates integers between 0 and 100
         int quantity = dist(random_generator_);
+        double price = getQuotePrice(vwap_price, best_bid, best_ask, trader_side_);
 
         bool should_place_order = false; 
         if (trader_side_ == Order::Side::BID && last_price_traded < (vwap_price)) // MAYBE CHANGE SO NOT SO RESTRICTIVE 
@@ -190,7 +228,6 @@ private:
 
         if (should_place_order) 
         { 
-            double price = getQuotePrice(vwap_price, best_bid, best_ask, trader_side_);
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
             std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | VWAP: " << vwap_price << " | Last Price: " << last_price_traded << "\n";
         }
