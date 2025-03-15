@@ -374,10 +374,10 @@ private:
                     }
                 }
                 injectSingleOrder(sMin, sMax, dMin, dMax, offset_value, step_mode);
-                std::this_thread::sleep_for(std::chrono::milliseconds(50 + (rand() % 100)));
+                std::this_thread::sleep_for(std::chrono::milliseconds(10)); 
             }
             double delay = getNextIssueDelay(trader_addresses_.size());
-            std::this_thread::sleep_for(std::chrono::milliseconds(static_cast<int>(delay * 250)));
+            std::this_thread::sleep_for(std::chrono::milliseconds(100)); 
         }
         std::cout << "[OrderInjector] Finished active injection.\n";
     }

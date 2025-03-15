@@ -140,7 +140,26 @@ private:
             {
                 lock.unlock();
                 {
-                    if (closing_prices_.size() >= lookback_period_)
+                    // Process any pending customer orders to initiate orders
+                    if (!customer_orders_.empty())
+                    {
+                        if (closing_prices_.size() >= lookback_period_)
+                        {
+                            double sma = calculateSMA(closing_prices_);
+                            double std_dev = calculateStandardDeviation(closing_prices_, sma);
+                            double upper_band = sma + (std_dev_multiplier_ * std_dev);
+                            double lower_band = sma - (std_dev_multiplier_ * std_dev);
+                            std::cout << "Calculated Bollinger Bands: Upper: " << upper_band << " | Lower: " << lower_band << "\n";
+                            placeOrder(upper_band, lower_band);  
+                        }
+                        // Else directly process customer orders to bootstrap market data
+                        else
+                        {
+                            processCustomerOrder();
+                        }
+                    }
+                    // Apply strat
+                    else if (closing_prices_.size() >= lookback_period_)
                     {
                         double sma = calculateSMA(closing_prices_);
                         double std_dev = calculateStandardDeviation(closing_prices_, sma);
@@ -159,14 +178,32 @@ private:
         });
     }
 
+
+    void processCustomerOrder()
+    {
+        auto cust_order = customer_orders_.top();
+        customer_orders_.pop();
+
+        Order::Side order_side = cust_order->side;
+        double order_price = cust_order->price;
+        std::uniform_int_distribution<int> dist(10, 50);
+        int quantity = dist(random_generator_);
+        
+        // Place order using customer injected order data
+        placeLimitOrder(exchange_, order_side, ticker_, quantity, order_price, order_price);
+        std::cout << ">> Customer Order: " << (order_side == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << order_price << "\n";
+    }
+
     void placeOrder(double upper_band, double lower_band)
     {
-        if (cancelling_ && last_accepted_order_id_.has_value()) // If cancelling is enabled and there is an accepted order (checks if there is previously placed order that has been accepted )
+        // Cancel previous order if needed
+        if (cancelling_ && last_accepted_order_id_.has_value())
         {
-            cancelOrder(exchange_, trader_side_, ticker_, last_accepted_order_id_.value()); // Cancel previously placed order
-            last_accepted_order_id_ = std::nullopt; // Reset last accepted order ID
+            cancelOrder(exchange_, trader_side_, ticker_, last_accepted_order_id_.value());
+            last_accepted_order_id_ = std::nullopt;
         }
-
+        
+        // Only proceed with Bollinger Bands strategy if we have market data
         if (!last_market_data_.has_value()) {
             std::cout << "No market data available, skipping order placement.\n";
             return;
@@ -177,38 +214,41 @@ private:
             auto cust_order = customer_orders_.top(); // Get next customer order
             customer_orders_.pop();
             limit_price_ = cust_order->price;
-            //trader_side_ = cust_order->side;
+            trader_side_ = cust_order->side; 
         }
         
+        // Get market data
         double best_bid = last_market_data_.value()->best_bid;
         double best_ask = last_market_data_.value()->best_ask;
         double last_price = last_market_data_.value()->last_price_traded;
-        double price = getQuotePrice(last_price, upper_band, lower_band, best_bid, best_ask); // Get quote price based on side
-        std::uniform_int_distribution<int> dist(10, 50);  // Generates integers between 0 and 100
+        double price = getQuotePrice(last_price, upper_band, lower_band, best_bid, best_ask);
+        std::uniform_int_distribution<int> dist(10, 50);
         int quantity = dist(random_generator_);
 
-        bool should_place_order = false; 
+        // Apply standard Bollinger Bands logic
+        bool should_place_order = false;
         
-        if (trader_side_ == Order::Side::BID && last_price < lower_band) // MAYBE CHANGE SO NOT SO RESTRICTIVE 
+        if (trader_side_ == Order::Side::BID && last_price < lower_band) 
         {
-           should_place_order = true; 
+            should_place_order = true;
+            std::cout << "Using Bollinger Bands" << "\n";
         }
         else if (trader_side_ == Order::Side::ASK && last_price > upper_band)
         {
             should_place_order = true;
+            std::cout << "Using Bollinger Bands" << "\n";
         }
         
         if (should_place_order) 
         { 
-            double price = getQuotePrice(last_price, upper_band, lower_band, best_bid, best_ask); // Get quote price based on side
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, price, limit_price_);
-            std::cout << ">> " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price << " | Upper Band: " << upper_band << " | Lower Band: " << lower_band << "\n";
+            std::cout << ">> Bollinger Bands: " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << price  << " | Upper Band: " << upper_band << " | Lower Band: " << lower_band << "\n";
         }
         else 
         { 
             std::cout << "Trade conditions NOT met. No order placed.\n";
         }
-    } 
+    }
 
     double getQuotePrice(double last_price, double upper_band, double lower_band, double best_bid, double best_ask)
     {   

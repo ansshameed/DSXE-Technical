@@ -71,11 +71,11 @@ public:
             return;
         }
         
-        // Generate random quantity for orders (similar to TraderShaver)
+        // Generate random quantity for orders
         std::uniform_int_distribution<int> dist(10, 50);
         int quantity = dist(random_generator_);
         
-        // If we have customer orders, use those; otherwise use default values
+        // If have customer orders then process them
         if (!customer_orders_.empty()) {
             std::lock_guard<std::mutex> lock(mutex_);
             auto cust_order = customer_orders_.top();
@@ -122,7 +122,8 @@ public:
                         model_price = msg->data->best_ask - 1;
                     }
                 }
-            } else { // BID
+            } 
+            else { // BID
                 if (model_price > limit_price_) {
                     model_price = limit_price_ - 1;
                     if (msg->data->best_bid > 0 && limit_price_ > msg->data->best_bid + 1) {
@@ -133,8 +134,7 @@ public:
             
             // Place the order
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, model_price, limit_price_);
-            std::cout << "DeepTrader (default): " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
-                      << " " << quantity << " @ " << model_price << " (limit: " << limit_price_ << ")\n";
+            std::cout << "DeepTrader (default): " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") << " " << quantity << " @ " << model_price << " (limit: " << limit_price_ << ")\n";
         }
     }
 
