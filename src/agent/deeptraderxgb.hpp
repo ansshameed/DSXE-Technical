@@ -1,6 +1,6 @@
-// trader_deep_integrated.hpp
-#ifndef TRADER_DEEP_INTEGRATED_HPP
-#define TRADER_DEEP_INTEGRATED_HPP
+// trader_deep_xgb.hpp
+#ifndef TRADER_DEEP_XGB_HPP
+#define TRADER_DEEP_XGB_HPP
 
 #include "traderagent.hpp"
 #include "../message/profitmessage.hpp"
@@ -14,10 +14,10 @@
 
 using json = nlohmann::json;
 
-class TraderDeepLSTM : public TraderAgent
+class TraderDeepXGB : public TraderAgent
 {
 public:
-    TraderDeepLSTM(NetworkEntity *network_entity, TraderConfigPtr config)
+    TraderDeepXGB(NetworkEntity *network_entity, TraderConfigPtr config)
     : TraderAgent(network_entity, config),
     exchange_{config->exchange_name},
     ticker_{config->ticker},
@@ -25,8 +25,8 @@ public:
     limit_price_{config->limit}
     {
         // Create a log file
-        std::ofstream init_log("./logs/deeptrader_init.log", std::ios::app);
-        init_log << " TraderDeepLSTM Initialisation START " << std::endl;
+        std::ofstream init_log("./logs/deeptrader_xgb_init.log", std::ios::app);
+        init_log << " TraderDeepXGB Initialisation START " << std::endl;
         init_log << "Timestamp: " << std::time(nullptr) << std::endl;
         
         // Initialise ONNX Runtime and load the model
@@ -44,25 +44,25 @@ public:
             TraderAgent::subscribeToMarket(config->exchange_name, config->ticker);
         });
     
-        init_log << "DeepTrader initialisation complete" << std::endl;
+        init_log << "DeepTraderXGB initialisation complete" << std::endl;
         init_log.close();
     }
 
-    ~TraderDeepLSTM() {
+    ~TraderDeepXGB() {
     }
     
-    std::string getAgentName() const override { return "DEEPLSTM"; } // To determine if legacy trader
+    std::string getAgentName() const override { return "DEEPXGB"; } // To determine if legacy trader
     
     void onTradingStart() override
     {
-        std::cout << "Trading window started for DeepTrader.\n";
-        is_trading_ = true; 
+        std::cout << "Trading window started for DeepTraderXGB.\n";
+        is_trading_ = true;
     }
 
     void onTradingEnd() override
     {
         is_trading_ = false;
-        std::cout << "Trading window ended for DeepTrader.\n";
+        std::cout << "Trading window ended for DeepTraderXGB.\n";
     }
 
     void onMarketData(std::string_view exchange, MarketDataMessagePtr msg) override
@@ -85,7 +85,7 @@ public:
             Order::Side side = cust_order->side;
             limit_price_ = cust_order->price;
             
-            // Get predicted price using LSTM
+            // Get predicted price using XGBoost
             double model_price = predictPrice(msg, side);
             
             // Apply price adjustments
@@ -107,7 +107,7 @@ public:
             
             // Place the order
             placeLimitOrder(exchange_, side, ticker_, cust_order->quantity, model_price, limit_price_);
-            std::cout << "DeepTrader (customer): " << (side == Order::Side::BID ? "BID" : "ASK") 
+            std::cout << "DeepTraderXGB (customer): " << (side == Order::Side::BID ? "BID" : "ASK") 
                       << " " << cust_order->quantity << " @ " << model_price << " (limit: " << limit_price_ << ")\n";
         } 
         else {
@@ -133,7 +133,7 @@ public:
             
             // Place the order
             placeLimitOrder(exchange_, trader_side_, ticker_, quantity, model_price, limit_price_);
-            std::cout << "DeepTrader (default): " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
+            std::cout << "DeepTraderXGB (default): " << (trader_side_ == Order::Side::BID ? "BID" : "ASK") 
                       << " " << quantity << " @ " << model_price << " (limit: " << limit_price_ << ")\n";
         }
     }
@@ -148,12 +148,12 @@ public:
             bookkeepTrade(msg->trade, limit_order);
         }
 
-        std::cout << "DeepTrader received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << " Qty remaining = " << msg->order->remaining_quantity << "\n";
+        std::cout << "DeepTraderXGB received execution report from " << exchange << ": Order: " << msg->order->id << " Status: " << msg->order->status << " Qty remaining = " << msg->order->remaining_quantity << "\n";
     }
 
     void onCancelReject(std::string_view exchange, CancelRejectMessagePtr msg) override
     {
-        std::cout << "DeepTrader received cancel reject from " << exchange 
+        std::cout << "DeepTraderXGB received cancel reject from " << exchange 
                   << " for order ID " << msg->order_id << "\n";
     }
 
@@ -167,7 +167,7 @@ public:
                 std::lock_guard<std::mutex> lock(mutex_);
                 // Use a stack like TraderShaver
                 customer_orders_.push(cust_msg);
-                std::cout << "[DEEPLSTM] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
+                std::cout << "[DEEPXGB] Received CUSTOMER_ORDER: side=" << (cust_msg->side == Order::Side::BID ? "BID" : "ASK") << " limit=" << cust_msg->price << "\n";
             }
             return;
         }
@@ -177,7 +177,6 @@ public:
     }
     
 private:
-
     // OrderInfo structure specific to Deep Trader
     struct OrderInfo {
         double price;
@@ -185,8 +184,8 @@ private:
         std::string otype;
     };
     
-    // ONNX Runtime environment and session for smart pointer to NN inference session
-    Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "TraderDeepLSTM"};
+    // ONNX Runtime environment and session
+    Ort::Env ort_env{ORT_LOGGING_LEVEL_WARNING, "TraderDeepXGB"};
     Ort::SessionOptions session_options;
     std::unique_ptr<Ort::Session> ort_session;
     
@@ -196,34 +195,28 @@ private:
     
     void initialiseModel() {
         try {
-            // Path to the ONNX model
-            std::string model_path = "../src/deeptrader/dt_lstm/lstm_models/DeepTrader_LSTM.onnx";
+            // Look for XGBoost model - different path from LSTM
+            std::string model_path = "../src/deeptrader/dt_xgb/xgb_models/DeepTrader_XGB.onnx";
             
             // Check if ONNX model file exists
             if (!std::filesystem::exists(model_path)) {
-                std::cerr << "ONNX model file not found at: " << model_path << std::endl;
-                std::cerr << "Trying alternative path..." << std::endl;
-                
-                model_path = "models/DeepTrader_LSTM/DeepTrader_LSTM.onnx";
-                if (!std::filesystem::exists(model_path)) {
-                    std::cerr << "ONNX model file not found at alternative path either." << std::endl;
-                    return;
-                }
+                std::cerr << "XGBoost ONNX model file not found at: " << model_path << std::endl;
+                return;
             }
             
-            std::cout << "Loading ONNX model from: " << model_path << std::endl;
+            std::cout << "Loading XGBoost ONNX model from: " << model_path << std::endl;
             
-            // Set graph optimization level
+            // Set graph optimisation level
             session_options.SetGraphOptimizationLevel(ORT_ENABLE_BASIC);
             
             // Create session
             ort_session = std::make_unique<Ort::Session>(ort_env, model_path.c_str(), session_options);
             
-            // Path to normalisation values in shared location (no alternatives)
+            // Load normalisation parameters from JSON file
             std::string norm_path = "../src/deeptrader/normalised_data/min_max_values.json";
             loadNormalisationValues(norm_path);
             
-            std::cout << "ONNX model loaded successfully" << std::endl;
+            std::cout << "XGBoost ONNX model loaded successfully" << std::endl;
         }
         catch (const Ort::Exception& e) {
             std::cerr << "ONNX Runtime error: " << e.what() << std::endl;
@@ -235,18 +228,18 @@ private:
     
     void loadNormalisationValues(const std::string& file_path) {
         try {
-            // If the sation file doesn't exist, use default values
+            // If the normalisation file doesn't exist, use default values
             if (!std::filesystem::exists(file_path)) {
                 std::cerr << "Normalisation file not found: " << file_path << std::endl;
                 std::cerr << "Using default normalisation values" << std::endl;
                 
-                // Create default values (14 features including the output - min = 0, max = 1; default)
+                // Create default values
                 min_values.resize(14, 0.0f);
                 max_values.resize(14, 1.0f);
                 return;
             }
             
-            // Read the JSON file min/max values
+            // Read the JSON file
             std::ifstream norm_file(file_path);
             json norm_data;
             norm_file >> norm_data;
@@ -277,7 +270,7 @@ private:
         double best_ask = msg->data->best_ask;
         
         // Create log file for predictions DEBUG
-        std::ofstream prediction_log("./logs/deeptrader_predictions.log", std::ios::app);
+        std::ofstream prediction_log("./logs/deeptrader_xgb_predictions.log", std::ios::app);
         prediction_log << "\n--- New Prediction Request ---" << std::endl;
         prediction_log << "Timestamp: " << std::time(nullptr) << std::endl;
         prediction_log << "Order Type: " << otype << std::endl;
@@ -343,22 +336,14 @@ private:
                                << ", min: " << min_values[i] << ", max: " << max_values[i] << ")" << std::endl;
             }
             
-            // Prepare input tensor
-            std::vector<int64_t> input_shape = {1, 1, 13}; // [batch_size, sequence_length, features]
+            // Prepare input tensor - KEY DIFFERENCE FROM LSTM: XGBoost uses flat vectors
+            std::vector<int64_t> input_shape = {1, 13}; // [batch_size, features] - no sequence dimension
             
-            // Define I/O names for the model for memory allocation utilities so NN uses CPU memory with default allocation settings
-            // INPUT = market data features fed into NN. OUTPUT = price prediction NN returns
+            // Define I/O names for the model
             Ort::AllocatorWithDefaultOptions allocator;
             Ort::MemoryInfo memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
 
-            /** Expected INPUT and OUTPUT names in log - DEBUG; 
-             * Input Tensor name = "input" index 0. Name of input tensor #0 is input
-             * Output Tensor name = "dense_2". Name of output tensor #0 is dense_2; last layer of keras model
-             */
-
-
-            // Get input names to identify input tensors in ONNX model; symbolic labels to match input data with correct nodes in NN computational graph 
-            // Computational Graph = underlying structure of NN to define how data flows through nodes
+            // Get input names
             size_t num_input_nodes = ort_session->GetInputCount();
             std::vector<std::string> input_names_str;
             std::vector<const char*> input_names;
@@ -369,7 +354,7 @@ private:
                 prediction_log << "Input " << i << " name: " << input_names[i] << std::endl; 
             }
 
-            // Get output names; Identifies output tensors in ONNX model; symbolic labels to access prediction results from NN after inference is complete
+            // Get output names
             size_t num_output_nodes = ort_session->GetOutputCount();
             std::vector<std::string> output_names_str;
             std::vector<const char*> output_names;
@@ -380,7 +365,7 @@ private:
                 prediction_log << "Output " << i << " name: " << output_names[i] << std::endl;
             }
             
-            prediction_log << "\nRunning ONNX model inference..." << std::endl;
+            prediction_log << "\nRunning XGBoost ONNX model inference..." << std::endl;
             
             // Create input tensor
             auto input_tensor = Ort::Value::CreateTensor<float>(
@@ -436,7 +421,7 @@ private:
             prediction_log << "Final model prediction: " << model_price << " for " << otype << std::endl;
             prediction_log.close();
             
-            std::cout << "ONNX model prediction: " << model_price << " for " << otype << std::endl;
+            std::cout << "XGBoost ONNX model prediction: " << model_price << " for " << otype << std::endl;
             return model_price;
         }
         catch (const Ort::Exception& e) {

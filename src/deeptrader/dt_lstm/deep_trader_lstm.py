@@ -4,12 +4,13 @@ LSTM Model for DeepTrader
 
 This script:
 1. Defines the LSTM neural network architecture
-2. Loads normalized data using the data generator
+2. Loads normalised data using the data generator
 3. Trains the model on the data
 4. Saves the trained model and plots the training loss
 """
 
 import os
+import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import Sequential
@@ -19,6 +20,19 @@ from tensorflow.keras.losses import MeanSquaredError
 from tensorflow.keras.metrics import MeanAbsoluteError, MeanSquaredLogarithmicError
 from tensorflow.keras.callbacks import ReduceLROnPlateau, EarlyStopping
 
+# Get the current directory and add parent to path to access shared modules
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # DeepTrader dir
+PROJECT_ROOT = os.path.dirname(PARENT_DIR)  # Project root
+
+# Model dir
+LSTM_MODEL_DIR = os.path.join(SCRIPT_DIR, "lstm_models")
+
+# Path to normalisation values (min/max values)
+NORM_VALUES_PATH = os.path.join(PARENT_DIR, "normalised_data/min_max_values.json")
+
+# Add parent dir to the path to import shared modules
+sys.path.append(PARENT_DIR)
 
 from data_generator import DeepTraderDataGenerator, BATCHSIZE, NUMBER_OF_FEATURES, NUMBER_OF_STEPS
 
@@ -73,61 +87,88 @@ class DeepTraderLSTM:
             verbose=1, 
         )
 
-        # Save training historu 
+        # Save training history 
         self.history = history.history
 
         return self.history
 
     def save_model(self): 
         """ Save the trained model """
-        model_dir = f"models/{self.model_name}"
-        os.makedirs(model_dir, exist_ok=True)
+        # Create model directory
+        os.makedirs(LSTM_MODEL_DIR, exist_ok=True)
         
         # Save the entire model, not just weights
-        self.model.save(f"{model_dir}/{self.model_name}.keras", save_format='keras')
-        print(f"Model saved to {model_dir}/")
+        model_path = os.path.join(LSTM_MODEL_DIR, f"{self.model_name}.keras")
+        self.model.save(model_path, save_format='keras')
         
-        # Save the min/max values alongside model for later use (could copy from data_generator)
+        print(f"Model saved to {model_path}")
+        
+        # Verify that shared normalisation values exist
+        self.verify_normalisation_values()
+        
+    def verify_normalisation_values(self):
+        """Verify that shared normalisation values exist."""
+        if os.path.exists(NORM_VALUES_PATH):
+            try:
+                import json
+                with open(NORM_VALUES_PATH, 'r') as f:
+                    data = json.load(f)
+                print(f"Shared normalisation values found at {NORM_VALUES_PATH}")
+                print(f"Contains {len(data['min_values'])} features")
+                return True
+            except Exception as e:
+                print(f"Error reading normalisation values: {e}")
+                return False
+        else:
+            print(f"Warning: Shared normalisation values not found at {NORM_VALUES_PATH}")
+            print("Make sure these exist before using the model in production")
+            return False
 
     def plot_training_history(self): 
 
-        """ PLot the training loss and metrics """
-        plt.figure(figsize=(10, 6))
+        """ Plot the training loss and metrics """
+        # Create a new figure with controlled size
+        fig = plt.figure(figsize=(10, 6))
 
         # Plot the loss 
-        plt.subplot(2, 1, 1)
-        plt.plot(self.history["loss"], label="loss")
-        plt.xlabel("Epoch")
-        plt.ylabel("Loss (MSE)")
-        plt.title('Model Loss')
+        ax1 = fig.add_subplot(2, 1, 1)
+        ax1.plot(self.history["loss"], label="loss")
+        ax1.set_xlabel("Epoch")
+        ax1.set_ylabel("Loss (MSE)")
+        ax1.set_title('Model Loss')
 
         # Plot metrics 
-        if 'mae' in self.history:
-            plt.subplot(2, 1, 2)
-            plt.plot(self.history["mae"], label="MAE")
-            if 'msle' in self.history:
-                plt.plot(self.history['msle'], label='MSLE')
-            plt.xlabel("Epoch")
-            plt.ylabel("Metrics")
-            plt.title('Model Metrics')
-            plt.legend()
+        if 'mean_absolute_error' in self.history:
+            ax2 = fig.add_subplot(2, 1, 2)
+            ax2.plot(self.history["mean_absolute_error"], label="MAE")
+            if 'mean_squared_logarithmic_error' in self.history:
+                ax2.plot(self.history['mean_squared_logarithmic_error'], label='MSLE')
+            ax2.set_xlabel("Epoch")
+            ax2.set_ylabel("Metrics")
+            ax2.set_title('Model Metrics')
+            ax2.legend()
 
-        plt.tight_layout()
+        fig.tight_layout()
 
-        # Create directory (if it doesn't exist) and save the plot
-        model_dir = f"models/{self.model_name}"
-        os.makedirs(model_dir, exist_ok=True)
-
-        # Save the plot 
-        plt.savefig(f"{model_dir}/training_history.png")
-        plt.show() 
+        # Save the plot to the model directory
+        plots_dir = os.path.join(LSTM_MODEL_DIR, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        
+        fig.savefig(os.path.join(plots_dir, "training_history.png"))
+        plt.close(fig)  # Close the figure to prevent it from showing
+        
+        saved_img = plt.imread(os.path.join(plots_dir, "training_history.png"))
+        plt.figure(figsize=(10, 6))
+        plt.imshow(saved_img)
+        plt.axis('off')
+        plt.show()
 
 def main(): 
     # Define model input shape: (batch_size, time_steps, features)
     input_shape = (BATCHSIZE, NUMBER_OF_STEPS, NUMBER_OF_FEATURES)
 
-    # Create data generator
-    data_path = "normalised_data/normalised_data.pkl"
+    # Create data generator using the shared normalised data path
+    data_path = os.path.join(PARENT_DIR, "normalised_data/normalised_data.pkl")
     data_generator = DeepTraderDataGenerator(data_path)
     
     # Print a sample of training data
@@ -143,9 +184,9 @@ def main():
     
     # Print a few examples
     print("\nFeature examples (first 3 samples):")
-    for i in range(3):
+    for i in range(min(3, x_batch.shape[0])):
         print(f"Sample {i+1}:")
-        for step in range(NUMBER_OF_STEPS):
+        for step in range(min(3, NUMBER_OF_STEPS)):
             print(f"  Step {step+1}: {x_batch[i, step]}")
         print(f"  Target: {y_batch[i, 0]}")
     
@@ -158,6 +199,6 @@ def main():
     lstm_model.plot_training_history()
 
     print("Model training complete.")
+
 if __name__ == "__main__":
     main()
-

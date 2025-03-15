@@ -84,21 +84,35 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/logs/traders)
 
 # Create models directory in the build directory for ONNX model
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/models/DeepTrader_LSTM)
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/models/DeepTrader_XGB)
 
 # Check if model files exist and copy them if they do
-set(ONNX_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/models/DeepTrader_LSTM/DeepTrader_LSTM.onnx)
-set(NORM_VALUES_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/models/DeepTrader_LSTM/normalization_values.json)
+set(LSTM_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/dt_lstm/lstm_models/DeepTrader_LSTM.onnx) # ONNX LSTM model 
+set(XGB_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/dt_xgb/xgb_models/DeepTrader_XGB.onnx) # ONNX XGB model
+set(NORM_VALUES_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/normalised_data/min_max_values.json) # Shared normalised values
 
-if(EXISTS ${ONNX_MODEL_PATH})
-    configure_file(${ONNX_MODEL_PATH} ${CMAKE_BINARY_DIR}/models/DeepTrader_LSTM/DeepTrader_LSTM.onnx COPYONLY)
-    message(STATUS "ONNX model found and copied")
+# Copy LSTM model if it exists
+if(EXISTS ${LSTM_MODEL_PATH})
+    configure_file(${LSTM_MODEL_PATH} ${CMAKE_BINARY_DIR}/models/DeepTrader_LSTM/DeepTrader_LSTM.onnx COPYONLY)
+    message(STATUS "LSTM ONNX model found and copied")
 else()
-    message(STATUS "ONNX model not found at ${ONNX_MODEL_PATH} - you'll need to run the conversion script first")
+    message(STATUS "LSTM ONNX model not found at ${LSTM_MODEL_PATH}")
 endif()
 
-if(EXISTS ${NORM_VALUES_PATH})
-    configure_file(${NORM_VALUES_PATH} ${CMAKE_BINARY_DIR}/models/DeepTrader_LSTM/normalization_values.json COPYONLY)
-    message(STATUS "Normalization values found and copied")
+# Copy XGBoost model if it exists
+if(EXISTS ${XGB_MODEL_PATH})
+    configure_file(${XGB_MODEL_PATH} ${CMAKE_BINARY_DIR}/models/DeepTrader_XGB/DeepTrader_XGB.onnx COPYONLY)
+    message(STATUS "XGBoost ONNX model found and copied")
 else()
-    message(STATUS "Normalization values not found at ${NORM_VALUES_PATH} - you'll need to run the conversion script first")
+    message(STATUS "XGBoost ONNX model not found at ${XGB_MODEL_PATH}")
+endif()
+
+# Copy shared normalisation values
+if(EXISTS ${NORM_VALUES_PATH})
+    # Copy to both model directories
+    configure_file(${NORM_VALUES_PATH} ${CMAKE_BINARY_DIR}/models/DeepTrader_LSTM/min_max_values.json COPYONLY)
+    configure_file(${NORM_VALUES_PATH} ${CMAKE_BINARY_DIR}/models/DeepTrader_XGB/min_max_values.json COPYONLY)
+    message(STATUS "Normalisation values found and copied")
+else()
+    message(STATUS "Normalisation values not found at ${NORM_VALUES_PATH}")
 endif()

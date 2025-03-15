@@ -28,6 +28,7 @@
 #include "agent/arbitragetrader.hpp"
 #include "agent/orchestratoragent.hpp"
 #include "agent/deeptraderlstm.hpp"
+#include "agent/deeptraderxgb.hpp"
 
 #include "message/message.hpp"
 #include "message/messagetype.hpp"
@@ -69,6 +70,7 @@ std::string showLocalUsage() {
     ss << "  " << "rsibb" << "\t\t" << " relative strength indicator bollinger bands trader" << "\n";
     ss << "  " << "obvvwap" << "\t" << "on balance volume volume-weighted average price trader" << "\n";
     ss << "  " << "deeplstm" << "\t" << "deep learning LSTM trader" << "\n";
+    ss << "  " << "deepxgb" << "\t" << "deep learning XGB trader" << "\n"; 
     ss << "\n";
     return ss.str();
 }
@@ -366,6 +368,22 @@ void local_runner(int argc, char** argv)
         config->delay = vm["delay"].as<unsigned int>();
 
         std::shared_ptr<TraderDeepLSTM> trader (new TraderDeepLSTM{&entity, config});
+        entity.setAgent(std::static_pointer_cast<Agent>(trader));
+        entity.start();
+    }
+    else if (agent_type == "deepxgb")
+    { 
+        // Create configuration
+        TraderConfigPtr config = std::make_shared<TraderConfig>();
+        config->agent_id = agent_id;
+        config->exchange_name = vm["exchange-name"].as<std::string>();
+        config->exchange_addr = vm["exchange-addr"].as<std::string>();
+        config->ticker = vm["ticker"].as<std::string>();
+        config->side = (vm["side"].as<std::string>() == "buyer") ? Order::Side::BID : Order::Side::ASK;
+        config->limit = vm["limit"].as<double>();
+        config->delay = vm["delay"].as<unsigned int>();
+
+        std::shared_ptr<TraderDeepXGB> trader (new TraderDeepXGB{&entity, config});
         entity.setAgent(std::static_pointer_cast<Agent>(trader));
         entity.start();
     }

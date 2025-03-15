@@ -1,7 +1,7 @@
-# convert_model_to_onnx.py
+# onnx_lstm.py
 """
 This script converts the Keras LSTM model to ONNX format for C++ integration.
-Also saves the normalisation values to a JSON file.
+It references the normalisation values from the shared directory.
 """
 
 import os
@@ -23,26 +23,24 @@ except ImportError:
 
 # Get current directory and project root
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+PARENT_DIR = os.path.dirname(SCRIPT_DIR)  # Deep trader dir
+PROJECT_ROOT = os.path.dirname(PARENT_DIR)  # Project root
 
-# Try different paths for the Keras model DEBUG
-possible_model_paths = [
-    os.path.join(SCRIPT_DIR, "models/DeepTrader_LSTM/DeepTrader_LSTM.keras"),
-    os.path.join(PROJECT_ROOT, "models/DeepTrader_LSTM/DeepTrader_LSTM.keras"),
-    os.path.join(PROJECT_ROOT, "models/DeepTrader_LSTM/DeepTrader_LSTM.keras")
-]
+# Model dir
+LSTM_MODEL_DIR = os.path.join(SCRIPT_DIR, "lstm_models")
 
-# Find an existing model or use the first path as default
-MODEL_PATH = next((path for path in possible_model_paths if os.path.exists(path)), possible_model_paths[0])
+# Look for the Keras model in the lstm_models directory
+MODEL_PATH = os.path.join(LSTM_MODEL_DIR, "DeepTrader_LSTM.keras")
 
-# Set output paths - always use the path that matches CMakeLists.txt expectations
-OUTPUT_DIR = os.path.join(PROJECT_ROOT, "deeptrader/models/DeepTrader_LSTM")
-OUTPUT_PATH = os.path.join(OUTPUT_DIR, "DeepTrader_LSTM.onnx")
-NORM_VALUES_PATH = os.path.join(OUTPUT_DIR, "normalization_values.json")
+# Set output paths
+OUTPUT_PATH = os.path.join(LSTM_MODEL_DIR, "DeepTrader_LSTM.onnx")
+
+# Path to shared normalisation values - reference only, not copying
+NORM_VALUES_PATH = os.path.join(PARENT_DIR, "normalised_data/min_max_values.json")
 
 print(f"Model path: {MODEL_PATH}")
 print(f"Output ONNX path: {OUTPUT_PATH}")
-print(f"Normalization values path: {NORM_VALUES_PATH}")
+print(f"Using normalisation values from: {NORM_VALUES_PATH}")
 
 def load_keras_model(model_path):
     """Load the Keras model or create a test model if none exists."""
@@ -121,31 +119,27 @@ def convert_to_onnx(model, output_path):
         print(f"All conversion methods failed: {e}")
         return False
 
-def copy_min_max_to_norm(src_path, dst_path):
-    """Copy min_max_values.json to normalisation_values.json."""
-    print(f"Copying values from {src_path} to {dst_path}")
-    
-    # Create directory if it doesn't exist
-    os.makedirs(os.path.dirname(dst_path), exist_ok=True)
-    
-    try:
-        with open(src_path, 'r') as src:
-            data = json.load(src)
-            
-        with open(dst_path, 'w') as dst:
-            json.dump(data, dst, indent=2)
-            
-        print("Values copied successfully")
-        return True
-    except Exception as e:
-        print(f"Error copying values: {e}")
+def verify_normalisation_values():
+    """Check if the shared normalisation values exist and are accessible."""
+    if os.path.exists(NORM_VALUES_PATH):
+        try:
+            with open(NORM_VALUES_PATH, 'r') as f:
+                data = json.load(f)
+            print(f"Shared normalisation values found at {NORM_VALUES_PATH}")
+            print(f"Contains {len(data['min_values'])} features")
+            return True
+        except Exception as e:
+            print(f"Error reading normalisation values: {e}")
+            return False
+    else:
+        print(f"Warning: Shared normalisation values not found at {NORM_VALUES_PATH}")
+        print("Make sure these exist before using the model in production")
         return False
 
 def main():
-    """Main function to convert the model and save normalisation values."""
+    """Main function to convert the model and verify normalisation values."""
     # Add paths for potential module imports
-    sys.path.append(os.path.join(PROJECT_ROOT, "src/deeptrader"))
-    sys.path.append(SCRIPT_DIR)
+    sys.path.append(PARENT_DIR)
     
     # Load or create Keras model
     model = load_keras_model(MODEL_PATH)
@@ -182,32 +176,8 @@ def main():
     # Convert model to ONNX
     success = convert_to_onnx(model, OUTPUT_PATH)
     
-    # Look for min_max_values.json in DeepTrader_LSTM folder
-    min_max_path = os.path.join(os.path.dirname(MODEL_PATH), "min_max_values.json")
-    
-    if os.path.exists(min_max_path):
-        # Copy min_max_values.json to normalisation_values.json
-        norm_success = copy_min_max_to_norm(min_max_path, NORM_VALUES_PATH)
-    else:
-        print(f"min_max_values.json not found at {min_max_path}")
-        print("Using default normalisation values")
-        
-        # Create default values (14 features including the output)
-        min_values = np.array([0.0] * 14)
-        max_values = np.array([1.0] * 14)
-        
-        # Save default normalisation values to file
-        norm_success = False
-        try:
-            os.makedirs(os.path.dirname(NORM_VALUES_PATH), exist_ok=True)
-            with open(NORM_VALUES_PATH, 'w') as f:
-                json.dump({
-                    "min_values": min_values.tolist(),
-                    "max_values": max_values.tolist()
-                }, f, indent=2)
-            norm_success = True
-        except Exception as e:
-            print(f"Error saving default normalisation values: {e}")
+    # Verify shared normalisation values exist
+    norm_success = verify_normalisation_values()
     
     return success and norm_success
 
@@ -220,6 +190,6 @@ if __name__ == "__main__":
         print("\nVerifying outputs:")
         print(f"ONNX model: {os.path.exists(OUTPUT_PATH)}")
         print(f"  - Size: {os.path.getsize(OUTPUT_PATH) / 1024:.1f} KB")
-        print(f"Normalisation values: {os.path.exists(NORM_VALUES_PATH)}")
-        print(f"\nFiles are ready at the correct location for CMake to find them.")
-        print(f"You can now build your project.")
+        print(f"Using normalisation values from: {NORM_VALUES_PATH}")
+        print(f"  - Values accessible: {os.path.exists(NORM_VALUES_PATH)}")
+        print(f"\nFiles are ready at the correct location for use.")

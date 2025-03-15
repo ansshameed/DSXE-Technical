@@ -207,6 +207,10 @@ AgentConfigPtr ConfigReader::configureAgent(int id, pugi::xml_node& xml_node, st
         {
             return configureTrader(id, xml_node, addr, exchange_addrs, type);
         }
+        case AgentType::TRADER_DEEP_XGB: 
+        { 
+            return configureTrader(id, xml_node, addr, exchange_addrs, type); 
+        }
         default:
         {
             throw std::runtime_error("Unknown XML tag in configuration file");
@@ -586,7 +590,7 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
     int port = 8100; // Start assigning trader ports from 8100
 
     // These are the expected trader types (exactly 10 values).
-    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb", "zip", "deeplstm"};
+    std::vector<std::string> trader_types = {"zic", "shvr", "vwap", "bb", "macd", "obvd", "obvvwap", "rsi", "rsibb", "zip", "deeplstm", "deepxgb"};
     std::unordered_map<std::string, AgentType> agent_type_map = {
         {"zic", AgentType::TRADER_ZIC}, 
         {"shvr", AgentType::TRADER_SHVR},
@@ -598,7 +602,8 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
         {"rsi", AgentType::TRADER_RSI},
         {"rsibb", AgentType::TRADER_RSI_BB}, 
         {"zip", AgentType::TRADER_ZIP}, 
-        {"deeplstm", AgentType::TRADER_DEEP_LSTM}
+        {"deeplstm", AgentType::TRADER_DEEP_LSTM}, 
+        {"deepxgb", AgentType::TRADER_DEEP_XGB}
     };
 
     // Use default exchange name and ticker from XML - WORKS ONLY FOR ONE EXCHANGE; CHANGE FOR ARBITRAGE. 
@@ -617,9 +622,9 @@ SimulationConfigPtr ConfigReader::readConfigFromCSV(const std::string& filepath,
             tokens.push_back(token);
         }
 
-        // Validate exactly 11 agents (tokens). 
-        if (tokens.size() != 11) {
-            throw std::runtime_error("Invalid CSV format: each line must contain exactly 11 comma-separated values.");
+        // Validate exactly 12 agents (tokens). 
+        if (tokens.size() != 12) {
+            throw std::runtime_error("Invalid CSV format: each line must contain exactly 12 comma-separated values.");
         }
 
         // Process each token

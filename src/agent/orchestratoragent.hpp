@@ -71,7 +71,7 @@ public:
                 {   
                     trader_addresses_.push_back(trader_config->addr);
                     launchTraderProcess(trader_config->addr, to_string(trader_config->type));
-                    std::this_thread::sleep_for(std::chrono::milliseconds(500)); // Wait for traders to launch
+                    std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait for traders to launch
                     configureNode(trader_config);
                 }
 

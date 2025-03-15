@@ -18,6 +18,7 @@ enum class AgentType : int
     TRADER_OBV_VWAP, // OBV and VWAP
     ARBITRAGE_TRADER, 
     TRADER_DEEP_LSTM, // DeepTrader LSTM
+    TRADER_DEEP_XGB // DeepTrader XGB
 };
 
 inline std::string to_string(AgentType agent_type)
@@ -38,6 +39,7 @@ inline std::string to_string(AgentType agent_type)
         case AgentType::TRADER_OBV_VWAP: return std::string{"TraderOBVVWAP"};
         case AgentType::ARBITRAGE_TRADER: return std::string{"ArbitrageTrader"};
         case AgentType::TRADER_DEEP_LSTM: return std::string{"DeepTraderLSTM"};
+        case AgentType::TRADER_DEEP_XGB: return std::string{"DeepTraderXGB"}; 
         default: return std::string{""};
     }
 }

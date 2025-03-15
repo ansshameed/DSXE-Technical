@@ -247,7 +247,7 @@ private:
 
     /** Legacy vs Technical agents. */
     bool technical_traders_ready_ = false; 
-    std::unordered_set<std::string> legacy_trader_types_ = {"ZIC", "ZIP", "SHVR", "DEEPLSTM"};
+    std::unordered_set<std::string> legacy_trader_types_ = {"ZIC", "ZIP", "SHVR", "DEEPLSTM", "DEEPXGB"};
     std::chrono::time_point<std::chrono::high_resolution_clock> ready_timestamp_;
     const int TECHNICAL_READY_DELAY_SECONDS = 4; 
 
