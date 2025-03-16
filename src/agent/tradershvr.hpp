@@ -33,7 +33,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "SHVR"; }
+    std::string getAgentName() const override { return "shvr"; }
 
     void terminate() override
     {

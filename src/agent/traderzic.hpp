@@ -36,7 +36,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "ZIC"; }
+    std::string getAgentName() const override { return "zic"; }
 
     /** Gracefully terminates the trader, freeing all memory. */
     void terminate() override

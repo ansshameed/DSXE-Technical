@@ -37,7 +37,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "OBV & VWAP"; }
+    std::string getAgentName() const override { return "obvvwap"; }
 
     void terminate() override
     {

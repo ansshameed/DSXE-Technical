@@ -36,7 +36,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "Bollinger Bands"; }
+    std::string getAgentName() const override { return "bb"; }
 
     void terminate() override
     {

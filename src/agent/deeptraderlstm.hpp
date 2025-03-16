@@ -51,7 +51,7 @@ public:
     ~TraderDeepLSTM() {
     }
     
-    std::string getAgentName() const override { return "DEEPLSTM"; } // To determine if legacy trader
+    std::string getAgentName() const override { return "deeplstm"; } // To determine if legacy trader
     
     void onTradingStart() override
     {

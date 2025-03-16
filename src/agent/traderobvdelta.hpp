@@ -35,7 +35,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "OBV Delta"; }
+    std::string getAgentName() const override { return "obvd"; }
 
     void terminate() override
     {

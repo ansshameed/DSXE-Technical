@@ -36,7 +36,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "VWAP"; }
+    std::string getAgentName() const override { return "vwap"; }
 
     /** Gracefully terminates the trader, freeing all memory. */
     void terminate() override

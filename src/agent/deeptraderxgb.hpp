@@ -51,7 +51,7 @@ public:
     ~TraderDeepXGB() {
     }
     
-    std::string getAgentName() const override { return "DEEPXGB"; } // To determine if legacy trader
+    std::string getAgentName() const override { return "deepxgb"; } // To determine if legacy trader
     
     void onTradingStart() override
     {

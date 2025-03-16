@@ -38,7 +38,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "MACD"; }
+    std::string getAgentName() const override { return "macd"; }
 
     void terminate() override
     {

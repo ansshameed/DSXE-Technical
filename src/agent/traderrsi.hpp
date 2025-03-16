@@ -40,7 +40,7 @@ public:
         addDelayedStart(config->delay);
     }
 
-    std::string getAgentName() const override { return "RSI"; }
+    std::string getAgentName() const override { return "rsi"; }
 
     void terminate() override
     {
