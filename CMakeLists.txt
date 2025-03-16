@@ -67,6 +67,7 @@ target_link_libraries(simulation
 configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_configs.cpp ${CMAKE_BINARY_DIR}/generate_configs.cpp COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/run_simulations.sh ${CMAKE_BINARY_DIR}/run_simulations.sh COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/upload_to_s3.sh ${CMAKE_BINARY_DIR}/upload_to_s3.sh COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/run_profit_simulations.sh ${CMAKE_BINARY_DIR}/run_profit_simulations.sh COPYONLY)
 
 add_custom_command(
     TARGET simulation POST_BUILD

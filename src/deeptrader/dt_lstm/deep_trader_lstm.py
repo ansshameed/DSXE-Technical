@@ -125,43 +125,149 @@ class DeepTraderLSTM:
             return False
 
     def plot_training_history(self): 
-
-        """ Plot the training loss and metrics """
-        # Create a new figure with controlled size
-        fig = plt.figure(figsize=(10, 6))
-
-        # Plot the loss 
-        ax1 = fig.add_subplot(2, 1, 1)
-        ax1.plot(self.history["loss"], label="loss")
-        ax1.set_xlabel("Epoch")
-        ax1.set_ylabel("Loss (MSE)")
-        ax1.set_title('Model Loss')
-
-        # Plot metrics 
-        if 'mean_absolute_error' in self.history:
-            ax2 = fig.add_subplot(2, 1, 2)
-            ax2.plot(self.history["mean_absolute_error"], label="MAE")
-            if 'mean_squared_logarithmic_error' in self.history:
-                ax2.plot(self.history['mean_squared_logarithmic_error'], label='MSLE')
-            ax2.set_xlabel("Epoch")
-            ax2.set_ylabel("Metrics")
-            ax2.set_title('Model Metrics')
-            ax2.legend()
-
-        fig.tight_layout()
-
-        # Save the plot to the model directory
+        
+        """ Plot the training loss and metrics as separate images """
         plots_dir = os.path.join(LSTM_MODEL_DIR, "plots")
         os.makedirs(plots_dir, exist_ok=True)
         
-        fig.savefig(os.path.join(plots_dir, "training_history.png"))
-        plt.close(fig)  # Close the figure to prevent it from showing
-        
-        saved_img = plt.imread(os.path.join(plots_dir, "training_history.png"))
+        # Plot the MSE loss
         plt.figure(figsize=(10, 6))
+        plt.plot(self.history["loss"], label="Loss", color='blue', linewidth=2)
+        plt.xlabel("Epoch")
+        plt.ylabel("Loss")
+        plt.title('Mean Squared Error (MSE)')
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
+        
+        # Save MSE plot
+        mse_path = os.path.join(plots_dir, "training_history_mse.png")
+        plt.savefig(mse_path)
+        plt.close()
+        
+        # Display MSE plot
+        mse_img = plt.imread(mse_path)
+        plt.figure(figsize=(10, 6))
+        plt.imshow(mse_img)
+        plt.axis('off')
+        plt.show()
+        
+        # Plot MAE if available
+        if 'mean_absolute_error' in self.history:
+            plt.figure(figsize=(10, 6))
+            plt.plot(self.history["mean_absolute_error"], label="MAE", color='green', linewidth=2)
+            plt.xlabel("Epoch")
+            plt.ylabel("Error")
+            plt.title('Mean Absolute Error (MAE)')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            # Save MAE plot
+            mae_path = os.path.join(plots_dir, "training_history_mae.png")
+            plt.savefig(mae_path)
+            plt.close()
+            
+            # Display MAE plot
+            mae_img = plt.imread(mae_path)
+            plt.figure(figsize=(10, 6))
+            plt.imshow(mae_img)
+            plt.axis('off')
+            plt.show()
+        
+        # Plot MSLE if available
+        if 'mean_squared_logarithmic_error' in self.history:
+            plt.figure(figsize=(10, 6))
+            plt.plot(self.history['mean_squared_logarithmic_error'], label='MSLE', color='red', linewidth=2)
+            plt.xlabel("Epoch")
+            plt.ylabel("Error")
+            plt.title('Mean Squared Logarithmic Error (MSLE)')
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            # Save MSLE plot
+            msle_path = os.path.join(plots_dir, "training_history_msle.png")
+            plt.savefig(msle_path)
+            plt.close()
+            
+            # Display MSLE plot
+            msle_img = plt.imread(msle_path)
+            plt.figure(figsize=(10, 6))
+            plt.imshow(msle_img)
+            plt.axis('off')
+            plt.show()
+    
+    def analyse_feature_importance(self, data_generator, feature_names=None):
+        """Analyse feature importance for LSTM model using permutation importance."""
+        # Get a batch of data for analysis
+        x_batch, y_batch = data_generator[0]
+        
+        # Compute baseline performance
+        baseline_performance = self.model.evaluate(x_batch, y_batch, verbose=0)
+        baseline_loss = baseline_performance[0]  # MSE is the first metric
+        
+        print(f"Baseline loss (MSE): {baseline_loss:.6f}")
+        
+        # Initialise feature importance dictionary
+        importance_scores = {}
+        
+        # For each feature, permute its values and measure impact
+        for feature_idx in range(x_batch.shape[2]):
+            feature_name = f"Feature_{feature_idx}"
+            if feature_names is not None and feature_idx < len(feature_names):
+                feature_name = feature_names[feature_idx]
+            
+            # Create a copy of the data
+            x_permuted = x_batch.copy()
+            
+            # Permute the feature across all samples and time steps
+            for time_step in range(x_batch.shape[1]):
+                x_permuted[:, time_step, feature_idx] = np.random.permutation(x_permuted[:, time_step, feature_idx])
+            
+            # Evaluate model on permuted data
+            permuted_performance = self.model.evaluate(x_permuted, y_batch, verbose=0)
+            permuted_loss = permuted_performance[0]
+            
+            # Calculate importance as increase in loss
+            importance = permuted_loss - baseline_loss
+            importance_scores[feature_name] = importance
+            
+            print(f"{feature_name}: Permuted loss = {permuted_loss:.6f}, Importance = {importance:.6f}")
+        
+        # Plot feature importance
+        self._plot_feature_importance(importance_scores)
+        
+        return importance_scores
+    
+    def _plot_feature_importance(self, importance_scores):
+        """Plot feature importance scores as a bar chart."""
+        # Sort features by importance
+        sorted_features = sorted(importance_scores.items(), key=lambda x: x[1], reverse=True)
+        features, importance = zip(*sorted_features)
+        
+        # Create plot
+        plt.figure(figsize=(12, 8))
+        bars = plt.barh(range(len(features)), importance, align='center')
+        plt.yticks(range(len(features)), features)
+        plt.xlabel('Increase in Loss (MSE) when Feature is Permuted')
+        plt.title('LSTM Feature Importance via Permutation')
+        
+        # Add values to the end of each bar
+        for i, v in enumerate(importance):
+            plt.text(v + 0.001, i, f"{v:.4f}", va='center')
+        
+        # Save the plot
+        plots_dir = os.path.join(LSTM_MODEL_DIR, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        plt.tight_layout()
+        plt.savefig(os.path.join(plots_dir, "lstm_feature_importance.png"))
+        plt.close()
+        
+        # Display saved image
+        saved_img = plt.imread(os.path.join(plots_dir, "lstm_feature_importance.png"))
+        plt.figure(figsize=(12, 8))
         plt.imshow(saved_img)
         plt.axis('off')
         plt.show()
+
 
 def main(): 
     # Define model input shape: (batch_size, time_steps, features)
@@ -193,6 +299,13 @@ def main():
     # Create and train the LSTM model 
     lstm_model = DeepTraderLSTM(input_shape)
     history = lstm_model.train(data_generator, epochs=20)
+
+    feature_names = ["timestamp", "time_diff", "side", "best_bid", "best_ask", 
+                "micro_price", "mid_price", "imbalance", "spread", 
+                "total_volume", "p_equilibrium", "smiths_alpha", "limit_price_chosen"]
+
+    print("Analysing feature importance...")
+    lstm_model.analyse_feature_importance(data_generator, feature_names)
 
     # Save and visualise the results 
     lstm_model.save_model()

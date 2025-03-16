@@ -16,6 +16,7 @@ import json
 import pickle
 import xgboost as xgb
 from sklearn.metrics import mean_squared_error, mean_absolute_error
+import shap
 
 # Get the current directory and add parent to path to access shared modules
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -51,9 +52,7 @@ class DeepTraderXGB:
             'colsample_bytree': 0.8,
             'gamma': 0,
             'n_estimators': 100,
-            'random_state': 42,
-            'eval_metric': 'rmse', 
-            'early_stopping_rounds': 10
+            'random_state': 42
         }
 
         # Create the model
@@ -62,7 +61,7 @@ class DeepTraderXGB:
         # For storing training results
         self.history = None
         
-    def train(self, data_generator, early_stopping_rounds=10):
+    def train(self, data_generator):
         """Train the model using the same data generator as LSTM."""
         print("Preparing data from the generator...")
         
@@ -71,12 +70,15 @@ class DeepTraderXGB:
         y_train = []
         
         # Process the same batches as LSTM would
+        total_batches = len(data_generator)
+        print(f"Total batches to process: {total_batches}")
         for i in range(len(data_generator)):
+            if i % 100 == 0:  # Print every 100 batches
+                print(f"Processing batch {i}/{total_batches} ({i/total_batches*100:.1f}%)")
             X_batch, y_batch = data_generator[i]
             
             # Reshape from LSTM format (batch, time_steps, features) to XGBoost format (batch, features)
             for j in range(X_batch.shape[0]):
-                # Take only the last time step for each sample
                 X_train.append(X_batch[j, -1, :])
                 y_train.append(y_batch[j, 0])
         
@@ -86,26 +88,21 @@ class DeepTraderXGB:
         
         print(f"Prepared data shape - X: {X_train.shape}, y: {y_train.shape}")
         
-        # Split into training and validation (80/20)
-        split_idx = int(0.8 * len(X_train))
-        X_val = X_train[split_idx:]
-        y_val = y_train[split_idx:]
-        X_train = X_train[:split_idx]
-        y_train = y_train[:split_idx]
-        
-        print(f"Training data shape: {X_train.shape}")
-        print(f"Validation data shape: {X_val.shape}")
-        
-        # Train the model
         print("Training XGBoost model...")
+        # Modify to track training loss
+        eval_set = [(X_train, y_train)]
         self.model.fit(
             X_train, y_train,
-            eval_set=[(X_train, y_train), (X_val, y_val)],
+            eval_set=eval_set,
             verbose=True
         )
         
         # Store the evaluation results
-        self.history = self.model.evals_result()
+        self.history = {
+            'training': {
+                'mse': self.model.evals_result()['validation_0']['rmse']
+            }
+        }
         
         return self.history
     
@@ -151,68 +148,122 @@ class DeepTraderXGB:
             return False
     
     def plot_training_history(self):
-        """Plot the training loss and metrics."""
-        if self.history is None:
+        """Plot the training loss."""
+        if self.history is None or 'training' not in self.history:
             print("No training history available")
             return
         
-        # Create a new figure with controlled size
-        fig = plt.figure(figsize=(12, 10))
+        # Extract training loss (MSE)
+        training_loss = self.history['training']['mse']
         
-        # Check which metrics are available in the history
-        available_metrics = []
-        for dataset in self.history.keys():
-            available_metrics.extend(self.history[dataset].keys())
-        available_metrics = list(set(available_metrics))  # Remove duplicates
+        # Create the plot
+        plt.figure(figsize=(10, 6))
+        plt.plot(training_loss, label='Training Loss (MSE)', color='blue')
+        plt.title('XGBoost Training Loss')
+        plt.xlabel('Boosting Iterations')
+        plt.ylabel('Mean Squared Error (MSE)')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.tight_layout()
         
-        print(f"Available metrics in history: {available_metrics}")
-        
-        # Plot each available metric
-        for i, metric in enumerate(available_metrics):
-            ax = fig.add_subplot(len(available_metrics), 1, i+1)
-            for dataset in self.history.keys():
-                if metric in self.history[dataset]:
-                    label = f"{dataset} {metric}"
-                    ax.plot(self.history[dataset][metric], label=label)
-            ax.set_xlabel("Boosting Iteration")
-            ax.set_ylabel(metric.upper())
-            ax.set_title(f"XGBoost {metric.upper()}")
-            ax.legend()
-        
-        fig.tight_layout()
-        
-        # Save the plot to the model directory
+        # Save the plot
         plots_dir = os.path.join(XGB_MODEL_DIR, "plots")
         os.makedirs(plots_dir, exist_ok=True)
+        plt.savefig(os.path.join(plots_dir, "training_loss.png"))
         
-        fig.savefig(os.path.join(plots_dir, "training_history_xgb.png"))
-        plt.close(fig)  # Close the figure to prevent it from showing
+        # Display the plot
+        plt.show()
         
-        # Now display the saved image
-        saved_img = plt.imread(os.path.join(plots_dir, "training_history_xgb.png"))
+    def plot_feature_importance(self, feature_names=None):
+        """Plot feature importance with optional feature names."""
+        # Get importance scores
+        importance = self.model.get_booster().get_score(importance_type='gain')
+        
+        # Create a list of (feature_name, importance_value) tuples
+        if feature_names is not None:
+            # Map feature indices to names
+            name_importance = []
+            for key, value in importance.items():
+                idx = int(key[1:])  # Extract the index from 'f0', 'f1', etc.
+                if idx < len(feature_names):
+                    name = feature_names[idx]
+                    name_importance.append((name, value))
+                else:
+                    name_importance.append((key, value))
+            
+            # Sort by importance
+            name_importance.sort(key=lambda x: x[1], reverse=True)
+            
+            # Take top 20 features
+            top_features = name_importance[:20]
+            
+            # Separate names and values
+            names = [x[0] for x in top_features]
+            values = [x[1] for x in top_features]
+            
+            # Create custom plot with feature names
+            fig, ax = plt.subplots(figsize=(10, 6))
+            y_pos = range(len(names))
+            ax.barh(y_pos, values, align='center')
+            ax.set_yticks(y_pos)
+            ax.set_yticklabels(names)
+            ax.invert_yaxis()  # Highest values at the top
+            ax.set_xlabel('Importance (Gain)')
+            ax.set_title("XGBoost Feature Importance")
+        else:
+            # Use default XGBoost plotting if no feature names
+            fig, ax = plt.subplots(figsize=(10, 6))
+            xgb.plot_importance(self.model, max_num_features=20, importance_type='gain', ax=ax)
+        
+        # Save numerical values with proper names
+        importance_dict = {}
+        for key, value in importance.items():
+            idx = int(key[1:])
+            if feature_names is not None and idx < len(feature_names):
+                importance_dict[feature_names[idx]] = value
+            else:
+                importance_dict[key] = value
+        
+        importance_path = os.path.join(XGB_MODEL_DIR, "feature_importance.json")
+        with open(importance_path, 'w') as f:
+            json.dump(importance_dict, f, indent=2)
+        
+        # Save the plot
+        plots_dir = os.path.join(XGB_MODEL_DIR, "plots")
+        os.makedirs(plots_dir, exist_ok=True)
+        fig.savefig(os.path.join(plots_dir, "feature_importance.png"))
+        plt.close(fig)
+        
+        # Display saved image
+        saved_img = plt.imread(os.path.join(plots_dir, "feature_importance.png"))
         plt.figure(figsize=(10, 6))
         plt.imshow(saved_img)
         plt.axis('off')
         plt.show()
         
-    def plot_feature_importance(self):
-        """Plot feature importance."""
-        fig = plt.figure(figsize=(10, 6))
-        ax = fig.add_subplot(111)
+        # Return the importance dict
+        return importance_dict
+    
+    def plot_shap_values(self, X_sample, feature_names=None):
+        """Plot SHAP values to show feature contributions."""
+
+        # Create explainer and get SHAP values
+        explainer = shap.TreeExplainer(self.model)
+        shap_values = explainer.shap_values(X_sample)
         
-        xgb.plot_importance(self.model, max_num_features=20, importance_type='gain', ax=ax)
-        ax.set_title("XGBoost Feature Importance")
+        # Create plot
+        plt.figure(figsize=(10, 8))
+        shap.summary_plot(shap_values, X_sample, feature_names=feature_names, show=False)
         
-        # Save the plot to the model directory
+        # Save plot
         plots_dir = os.path.join(XGB_MODEL_DIR, "plots")
         os.makedirs(plots_dir, exist_ok=True)
+        plt.savefig(os.path.join(plots_dir, "shap_summary.png"))
+        plt.close()
         
-        fig.savefig(os.path.join(plots_dir, "feature_importance.png"))
-        plt.close(fig)  # Close the figure to prevent it from showing
-        
-        # Now display the saved image
-        saved_img = plt.imread(os.path.join(plots_dir, "feature_importance.png"))
-        plt.figure(figsize=(10, 6))
+        # Display saved image
+        saved_img = plt.imread(os.path.join(plots_dir, "shap_summary.png"))
+        plt.figure(figsize=(10, 8))
         plt.imshow(saved_img)
         plt.axis('off')
         plt.show()
@@ -220,6 +271,11 @@ class DeepTraderXGB:
 def main():
     # Define model input shape - same as LSTM
     input_shape = (BATCHSIZE, NUMBER_OF_STEPS, NUMBER_OF_FEATURES)
+
+    # Define feature names
+    feature_names = ["timestamp", "time_diff", "side", "best_bid", "best_ask", 
+                    "micro_price", "mid_price", "imbalance", "spread", 
+                    "total_volume", "p_equilibrium", "smiths_alpha", "limit_price_chosen"]
 
     # Create data generator - reuse the same one as LSTM
     data_path = os.path.join(PARENT_DIR, "normalised_data/normalised_data.pkl")
@@ -234,7 +290,15 @@ def main():
     # Save and visualize the results
     xgb_model.save_model()
     xgb_model.plot_training_history()
-    xgb_model.plot_feature_importance()
+    
+    # Pass feature names to the plot_feature_importance method
+    xgb_model.plot_feature_importance(feature_names)
+
+    X_batch, y_batch = data_generator[0] 
+    X_sample = np.array([X_batch[i, -1, :] for i in range(X_batch.shape[0])])
+    #if len(X_sample) > 100: # Limit sample for SHAP for plotting speed
+        #X_sample = X_sample[:100]
+    #xgb_model.plot_shap_values(X_sample, feature_names)
     
     print("XGBoost model training complete.")
 

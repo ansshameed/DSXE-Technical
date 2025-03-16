@@ -7,7 +7,5 @@
   "colsample_bytree": 0.8,
   "gamma": 0,
   "n_estimators": 100,
-  "random_state": 42,
-  "eval_metric": "rmse",
-  "early_stopping_rounds": 10
+  "random_state": 42
 }
