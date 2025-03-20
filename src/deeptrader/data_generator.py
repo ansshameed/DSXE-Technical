@@ -19,7 +19,7 @@ import json
 import os
 
 # Constants
-BATCHSIZE = 512  # (Change this back to 16384 once we have all the data). Number of LOB snapshots processed simulataneously through NN during each training step
+BATCHSIZE = 1000  # (Change this back to 16384 once we have all the data). Number of LOB snapshots processed simulataneously through NN during each training step
 NUMBER_OF_FEATURES = 13  # First 13 columns are features
 NUMBER_OF_STEPS = 1      # For LSTM sequence length; treating each snapshot as independent datapoint without considering relationship to previous snapshots. If value e.g. 10 LSTM would be fed sequences of 10 snapshots to predict next value; learn temporal patterns in the market data for predictions. 5 = 5 consecutive lob snapshots to learn temporal patterns
 

@@ -30,9 +30,9 @@ def parse_args():
     parser.add_argument('--bucket', type=str, default='dsxe-results', help='S3 bucket name')
     parser.add_argument('--prefix', type=str, default='all_simulation_data/lob_snapshot', help='S3 prefix path')
     parser.add_argument('--output_dir', type=str, default='normalised_data', help='Output directory')
-    parser.add_argument('--sample_size', type=int, default=5000, help='Number of files to sample for min/max calculation')
+    parser.add_argument('--sample_size', type=int, default=3000, help='Number of files to sample for min/max calculation')
     parser.add_argument('--region', type=str, default='us-east-1', help='AWS region')
-    parser.add_argument('--max_files', type=int, default=5000, help='Maximum number of files to process')
+    parser.add_argument('--max_files', type=int, default=3000, help='Maximum number of files to process')
     return parser.parse_args()
 
 def setup_directories(output_dir):
@@ -73,7 +73,7 @@ def list_s3_files(bucket_name, prefix, region, max_files=None):
     
     return file_keys
 
-def sample_s3_file(bucket_name, file_key, region, max_rows=5000):
+def sample_s3_file(bucket_name, file_key, region, max_rows=2500):
     """Download and sample a file from S3."""
     s3 = boto3.client('s3', region_name=region)
     
