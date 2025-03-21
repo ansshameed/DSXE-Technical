@@ -1,10 +1,10 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: dsxe-simulation-batch-8
+  name: dsxe-simulation-batch-8-retry-1
 spec:
-  parallelism: 5
-  completions: 5
+  parallelism: 1
+  completions: 1
   backoffLimit: 4
   template:
     spec:
@@ -13,18 +13,18 @@ spec:
         image: 588738568626.dkr.ecr.eu-west-2.amazonaws.com/dsxe-lob-simulation:latest
         resources:
           requests:
-            memory: "2Gi"
-            cpu: "1"
+            memory: "3Gi"
+            cpu: "1.5"
           limits:
             memory: "4Gi"
             cpu: "2"
         env:
         - name: CONFIG_START
-          value: "14000"
+          value: "3662"
         - name: CONFIG_END
-          value: "15999"
+          value: "3999"
         - name: TRIALS_PER_CONFIG
-          value: "5"
+          value: "3"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:
