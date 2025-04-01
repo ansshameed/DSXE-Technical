@@ -3,7 +3,7 @@ project(simulation)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(Boost 1.76.0 COMPONENTS system filesystem serialization program_options REQUIRED)
+find_package(Boost 1.74.0 COMPONENTS system filesystem serialization program_options REQUIRED)
 
 if(Boost_FOUND)
     message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
@@ -14,23 +14,50 @@ endif()
 
 # Find Python and pybind11 for DeepTrader
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+set(pybind11_DIR "/usr/lib/cmake/pybind11" CACHE PATH "Directory containing pybind11Config.cmake")
 find_package(pybind11 REQUIRED)
 include_directories(
     ${Python3_INCLUDE_DIRS}
     ${Python3_NumPy_INCLUDE_DIRS}
 )
 
-# Find ONNX Runtime from Homebrew MAC
-set(ONNXRUNTIME_LIB "/opt/homebrew/Cellar/onnxruntime/1.21.0/lib/libonnxruntime.dylib")
-set(ONNXRUNTIME_INCLUDE_DIR "/opt/homebrew/Cellar/onnxruntime/1.21.0/include")
+# Flexible ONNX Runtime detection
+# Try to find ONNX Runtime using multiple methods
+find_path(ONNXRUNTIME_INCLUDE_DIR 
+    NAMES onnxruntime_cxx_api.h
+    PATHS 
+    /usr/include/onnxruntime
+    /usr/local/include/onnxruntime
+    /opt/homebrew/include/onnxruntime
+    ${CUSTOM_ONNXRUNTIME_INCLUDE_DIR}
+)
 
+find_library(ONNXRUNTIME_LIB
+    NAMES onnxruntime libonnxruntime
+    PATHS
+    /usr/lib
+    /usr/local/lib
+    /opt/homebrew/lib
+    ${CUSTOM_ONNXRUNTIME_LIB_DIR}
+)
+
+# Fallback to environment variable or default Homebrew path if not found
+if(NOT ONNXRUNTIME_LIB)
+    set(ONNXRUNTIME_LIB "/opt/homebrew/Cellar/onnxruntime/1.21.0/lib/libonnxruntime.dylib")
+endif()
+
+if(NOT ONNXRUNTIME_INCLUDE_DIR)
+    set(ONNXRUNTIME_INCLUDE_DIR "/opt/homebrew/Cellar/onnxruntime/1.21.0/include")
+endif()
+
+# Verify ONNX Runtime is found
 if(EXISTS "${ONNXRUNTIME_LIB}" AND IS_DIRECTORY "${ONNXRUNTIME_INCLUDE_DIR}")
     message(STATUS "Found ONNX Runtime:")
     message(STATUS "  - Library: ${ONNXRUNTIME_LIB}")
     message(STATUS "  - Include: ${ONNXRUNTIME_INCLUDE_DIR}")
     include_directories(${ONNXRUNTIME_INCLUDE_DIR})
 else()
-    message(FATAL_ERROR "ONNX Runtime not found at expected paths.\n  Library: ${ONNXRUNTIME_LIB}\n  Include: ${ONNXRUNTIME_INCLUDE_DIR}")
+    message(FATAL_ERROR "ONNX Runtime not found.\n  Library: ${ONNXRUNTIME_LIB}\n  Include: ${ONNXRUNTIME_INCLUDE_DIR}")
 endif()
 
 # Find JSON library
@@ -50,6 +77,7 @@ add_executable(simulation src/main.cpp
                           src/pugi/pugixml.cpp)
 
 add_executable(generate_configs scripts/generate_configs.cpp)
+add_executable(generate_profit_configs scripts/generate_profit_configs.cpp)
 
 # Link libraries AFTER defining the targets
 if(Boost_FOUND)
@@ -62,17 +90,23 @@ target_link_libraries(simulation
     pybind11::module
     nlohmann_json::nlohmann_json
     ${ONNXRUNTIME_LIB}  # Add ONNX Runtime library here
+    dl                  # Dynamic linking library
+    pthread             # POSIX threads library
 )
 
 configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_configs.cpp ${CMAKE_BINARY_DIR}/generate_configs.cpp COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/generate_profit_configs.cpp ${CMAKE_BINARY_DIR}/generate_profit_configs.cpp COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/run_simulations.sh ${CMAKE_BINARY_DIR}/run_simulations.sh COPYONLY)
-configure_file(${CMAKE_SOURCE_DIR}/scripts/upload_to_s3.sh ${CMAKE_BINARY_DIR}/upload_to_s3.sh COPYONLY)
 configure_file(${CMAKE_SOURCE_DIR}/scripts/run_profit_simulations.sh ${CMAKE_BINARY_DIR}/run_profit_simulations.sh COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/upload_to_s3.sh ${CMAKE_BINARY_DIR}/upload_to_s3.sh COPYONLY)
+configure_file(${CMAKE_SOURCE_DIR}/scripts/upload_profits_to_s3.sh ${CMAKE_BINARY_DIR}/upload_profits_to_s3.sh COPYONLY)
 
 add_custom_command(
     TARGET simulation POST_BUILD
     COMMAND chmod +x ${CMAKE_BINARY_DIR}/run_simulations.sh
+    COMMAND chmod +x ${CMAKE_BINARY_DIR}/run_profit_simulations.sh
     COMMAND chmod +x ${CMAKE_BINARY_DIR}/upload_to_s3.sh
+    COMMAND chmod +x ${CMAKE_BINARY_DIR}/upload_profits_to_s3.sh
 )
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/lob_snapshots)
@@ -88,9 +122,9 @@ file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/models/DeepTrader_LSTM)
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/models/DeepTrader_XGB)
 
 # Check if model files exist and copy them if they do
-set(LSTM_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/dt_lstm/lstm_models/DeepTrader_LSTM.onnx) # ONNX LSTM model 
-set(XGB_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/dt_xgb/xgb_models/DeepTrader_XGB.onnx) # ONNX XGB model
-set(NORM_VALUES_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/normalised_data/min_max_values.json) # Shared normalised values
+set(LSTM_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/dt_lstm/lstm_models/DeepTrader_LSTM.onnx)
+set(XGB_MODEL_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/dt_xgb/xgb_models/DeepTrader_XGB.onnx)
+set(NORM_VALUES_PATH ${CMAKE_SOURCE_DIR}/src/deeptrader/normalised_data/min_max_values.json)
 
 # Copy LSTM model if it exists
 if(EXISTS ${LSTM_MODEL_PATH})

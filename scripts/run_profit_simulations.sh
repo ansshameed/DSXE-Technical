@@ -1,25 +1,47 @@
 #!/bin/bash
 
 # Configuration parameters
-XML_CONFIG="../simulationexample.xml"
+MARKETS_FILE="./markets_profits.csv"
+XML_CONFIG="/app/build/simulationexample.xml"
 SIMULATION_EXECUTABLE="./simulation"
-TRIALS=10  # Number of trials to run
+TRIALS=500  # Number of trials to run per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
 INJECTOR_PORT=8088
 BASE_ORCHESTRATOR_PORT=10001
-PROFITS_FILE="$RESULTS_DIR/consolidated_profits.csv"
+TEMP_CONFIG_PATH="./temp_config.csv"
+
+# S3 upload parameters
+S3_BUCKET="dsxe-results"
+S3_PREFIX="profit_experiments"
+SIMULATION_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
 # Create required directories
-mkdir -p "$RESULTS_DIR/logs"
+mkdir -p "$RESULTS_DIR/logs" "$RESULTS_DIR/profits"
 mkdir -p "lob_snapshots" "trades" "market_data" "profits" "messages" "logs" "logs/traders"
+mkdir -p "$(dirname "$TEMP_CONFIG_PATH")"
 
 # Store the script's own PID to avoid killing itself
 MY_PID=$$
 echo "Script running with PID: $MY_PID"
 
-# Write CSV header
-echo "trial,trader_type_1,num_traders_1,total_profit_1,avg_profit_per_trader_1,trader_type_2,num_traders_2,total_profit_2,avg_profit_per_trader_2" > "$PROFITS_FILE"
+# S3 upload function
+upload_to_s3() {
+    local source_file="$1"
+    local destination_key="$2"
+    
+    echo "Uploading $source_file to s3://$S3_BUCKET/$destination_key"
+    aws s3 cp "$source_file" "s3://$S3_BUCKET/$destination_key"
+    
+    local upload_status=$?
+    if [ $upload_status -eq 0 ]; then
+        echo "Upload successful!"
+    else
+        echo "Upload failed with status $upload_status"
+    fi
+    
+    return $upload_status
+}
 
 # Cleanup function that excludes our own process
 cleanup() {
@@ -53,6 +75,7 @@ cleanup() {
 # Extract profits from the profit files and consolidate them
 extract_profits() {
     local trial_num="$1"
+    local profits_file="$2"
     
     # Find the most recent profit file
     local latest_file=$(ls -t profits/*.csv 2>/dev/null | head -1)
@@ -143,25 +166,33 @@ extract_profits() {
     done
     
     # Write to consolidated file
-    echo "$output_line" >> "$PROFITS_FILE"
+    echo "$output_line" >> "$profits_file"
     
-    echo "Added profit data for trial $trial_num to $PROFITS_FILE"
+    echo "Added profit data for trial $trial_num to $profits_file"
     
     # Backup this file with trial number to avoid processing it again
-    cp "$latest_file" "$latest_file.trial_$trial_num"
+    cp "$latest_file" "$latest_file.trial_${trial_num}"
 }
 
-# Function to run a single trial
+# Function to run a single trial with config passed as argument
 run_trial() {
-    local trial_num="$1"
+    local config_line="$1"
+    local config_num="$2"
+    local trial_num="$3"
+    local profits_file="$4"
+    
     local orchestrator_port=$((BASE_ORCHESTRATOR_PORT + trial_num))
-    local log_file="$RESULTS_DIR/logs/trial_${trial_num}.log"
-    local exchange_log="$RESULTS_DIR/logs/exchange_trial_${trial_num}.log"
-    local injector_log="$RESULTS_DIR/logs/injector_trial_${trial_num}.log"
+    local log_file="$RESULTS_DIR/logs/config_${config_num}_trial_${trial_num}.log"
+    local exchange_log="$RESULTS_DIR/logs/exchange_config_${config_num}_trial_${trial_num}.log"
+    local injector_log="$RESULTS_DIR/logs/injector_config_${config_num}_trial_${trial_num}.log"
     
-    echo "Running trial $trial_num on port $orchestrator_port"
+    echo "Running configuration $config_num, trial $trial_num on port $orchestrator_port"
     
-    # Step 1: Start Exchange Node
+    # Step 1: Create the temp_config.csv file where orchestrator expects it
+    echo "$config_line" > "$TEMP_CONFIG_PATH"
+    cp "$TEMP_CONFIG_PATH" "../markets.csv"
+    
+    # Step 2: Start Exchange Node
     echo "Starting Exchange Node on port $EXCHANGE_PORT..."
     $SIMULATION_EXECUTABLE node --port $EXCHANGE_PORT > "$exchange_log" 2>&1 &
     EXCHANGE_PID=$!
@@ -175,7 +206,7 @@ run_trial() {
         return 1
     fi
     
-    # Step 2: Start Order Injector Node
+    # Step 3: Start Order Injector Node
     echo "Starting Order Injector Node on port $INJECTOR_PORT..."
     $SIMULATION_EXECUTABLE node --port $INJECTOR_PORT > "$injector_log" 2>&1 &
     INJECTOR_PID=$!
@@ -190,7 +221,7 @@ run_trial() {
         return 1
     fi
     
-    # Step 3: Start Orchestrator and monitor its output
+    # Step 4: Start Orchestrator and monitor its output
     echo "Starting Orchestrator on port $orchestrator_port with XML config..."
     
     # Launch orchestrator in background
@@ -216,7 +247,7 @@ run_trial() {
     while [ $elapsed -lt $max_wait ]; do
         # Check for profits calculation - this is the last reliable message before hanging
         if grep -q "Profits calculated internally by exchange" "$exchange_log"; then
-            sleep 2
+            sleep 1
             echo "Detected profit calculation - assuming trial is complete."
             found_completion=true
             break
@@ -224,7 +255,7 @@ run_trial() {
         
         # Also check for other completion messages
         if grep -q "Finished writing profits to CSV" "$exchange_log" || 
-        grep -q "Trading session ended" "$exchange_log"; then
+           grep -q "Trading session ended" "$exchange_log"; then
             found_completion=true
             echo "Detected completion message - Trial fully complete."
             break
@@ -245,31 +276,38 @@ run_trial() {
         fi
     done
 
-    # Force termination if we've detected the profit calculation
-    if [ "$found_completion" = true ]; then
-        echo "Forcing termination of processes to proceed to next trial."
-        kill $EXCHANGE_PID $INJECTOR_PID $ORCH_PID 2>/dev/null || true
-
-        sleep 1
-        
-        # Extract profits and add to consolidated file
-        echo "Extracting profits for trial $trial_num..."
-        extract_profits "$trial_num"
-        
+    # Force termination of processes
+    echo "Terminating simulation processes..."
+    kill $EXCHANGE_PID $INJECTOR_PID $ORCH_PID 2>/dev/null || true
+    
+    # Check for profits file and extract
+    local latest_profit_file=$(ls -t profits/*.csv 2>/dev/null | head -1)
+    
+    # Verify profit file exists and is not empty
+    if [ -z "$latest_profit_file" ] || [ $(wc -l < "$latest_profit_file") -le 1 ]; then
+        echo "ERROR: No valid profit file found for trial $trial_num"
+        return 1
+    fi
+    
+    # Extract profits
+    echo "Extracting profits for trial $trial_num..."
+    if extract_profits "$trial_num" "$profits_file"; then
         echo "Trial $trial_num completed successfully"
         return 0
     else
-        echo "Trial $trial_num timed out or failed"
-        echo "  === Last 20 lines of exchange log ==="
-        tail -n 20 "$exchange_log"
-        echo "  === Last 20 lines of orchestrator log ==="
-        tail -n 20 "$log_file"
+        echo "ERROR: Failed to extract profits for trial $trial_num"
         return 1
     fi
 }
 
 # Trap signals to ensure cleanup
 trap cleanup SIGINT SIGTERM EXIT
+
+# Check if markets file exists
+if [ ! -f "$MARKETS_FILE" ]; then
+    echo "Error: Markets file not found at $MARKETS_FILE"
+    exit 1
+fi
 
 # Check if XML config exists
 if [ ! -f "$XML_CONFIG" ]; then
@@ -278,32 +316,53 @@ if [ ! -f "$XML_CONFIG" ]; then
     exit 1
 fi
 
-echo "Running $TRIALS trials"
+# Count total configurations
+TOTAL_CONFIGS=$(wc -l < "$MARKETS_FILE")
+echo "Running $TOTAL_CONFIGS configurations with $TRIALS trials each"
 echo "Using XML config: $XML_CONFIG"
-echo "Results will be saved to: $PROFITS_FILE"
 
-# Run trials
-for TRIAL in $(seq 1 $TRIALS); do
-    echo "===== Starting Trial $TRIAL of $TRIALS ====="
+# Process each line of the markets_profits.csv file
+CONFIG_NUM=1
+while IFS=, read -r zic shvr vwap bb macd obvd obvvwap rsi rsibb zip deeplstm deepxgb || [ -n "$zic" ]; do
+    echo "Starting configuration $CONFIG_NUM/$TOTAL_CONFIGS"
     
-    # Ensure no previous processes are running
-    cleanup
+    # Create a profits file for this configuration
+    CONFIG_PROFITS_FILE="$RESULTS_DIR/profits/config_${CONFIG_NUM}_profits.csv"
+    echo "trial,trader_type_1,num_traders_1,total_profit_1,avg_profit_per_trader_1,trader_type_2,num_traders_2,total_profit_2,avg_profit_per_trader_2" > "$CONFIG_PROFITS_FILE"
     
-    # Run the trial
-    run_trial "$TRIAL"
-    TRIAL_RESULT=$?
+    # Store the config line to pass to run_trial
+    CONFIG_LINE="$zic,$shvr,$vwap,$bb,$macd,$obvd,$obvvwap,$rsi,$rsibb,$zip,$deeplstm,$deepxgb"
     
-    if [ $TRIAL_RESULT -ne 0 ]; then
-        echo "WARNING: Trial had issues, but continuing with next trial"
-    fi
+    # Run trials for this configuration
+    for TRIAL in $(seq 1 $TRIALS); do
+        echo "===== Starting Trial $TRIAL of $TRIALS for Configuration $CONFIG_NUM ====="
+        
+        # Ensure no previous processes are running
+        cleanup
+        
+        # Run the trial
+        run_trial "$CONFIG_LINE" "$CONFIG_NUM" "$TRIAL" "$CONFIG_PROFITS_FILE"
+        TRIAL_RESULT=$?
+        
+        if [ $TRIAL_RESULT -ne 0 ]; then
+            echo "WARNING: Trial failed, continuing with next trial"
+        fi
+        
+        # Wait between trials
+        echo "Waiting 2 seconds before next trial..."
+        sleep 2
+    done
+
+    # Upload the configuration's profits file to S3
+    echo "Uploading data for configuration $CONFIG_NUM to S3..."
+    upload_to_s3 "$CONFIG_PROFITS_FILE" "$S3_PREFIX/config_${CONFIG_NUM}_profits.csv"
     
-    # Wait between trials
-    echo "Waiting 2 seconds before next trial..."
-    sleep 2
-done
+    echo "Configuration $CONFIG_NUM completed. Results saved to $CONFIG_PROFITS_FILE"
+    CONFIG_NUM=$((CONFIG_NUM + 1))
+done < "$MARKETS_FILE"
 
 # Final cleanup
 cleanup
 
-echo "All trials completed!"
-echo "Consolidated profits file created at: $PROFITS_FILE"
+echo "All configurations and trials completed!"
+echo "Results saved to $RESULTS_DIR/profits/ directory"
