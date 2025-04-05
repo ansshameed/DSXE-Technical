@@ -1,5 +1,6 @@
 #include "configreader.hpp"
 #include "../agent/agentfactory.hpp"
+#include "../pugi/pugixml.hpp"
 
 SimulationConfigPtr ConfigReader::readConfig(std::string& filepath)
 {

@@ -7,7 +7,7 @@ SIMULATION_EXECUTABLE="./simulation"
 TRIALS_PER_CONFIG=3 # Number of trials per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
-INJECTOR_PORT=8088
+INJECTOR_PORT=8089
 BASE_ORCHESTRATOR_PORT=10001
 TEMP_CONFIG_PATH="./temp_config.csv"
 
@@ -49,7 +49,7 @@ cleanup() {
     
     # Force release ports
     echo "Forcibly releasing ports..."
-    fuser -k 9999/tcp 8088/tcp 10001/tcp 10002/tcp 10003/tcp 10004/tcp 10005/tcp 2>/dev/null || true
+    fuser -k 9999/tcp 8089/tcp 10001/tcp 10002/tcp 10003/tcp 10004/tcp 10005/tcp 2>/dev/null || true
     sleep 1
 }
 
@@ -222,7 +222,6 @@ while IFS=, read -r zic shvr vwap bb macd obvd obvvwap rsi rsibb zip || [ -n "$z
     #S3 upload script called here
     if [ -f "$S3_UPLOAD_SCRIPT" ]; then
         echo "Uploading data for configuration $CONFIG_NUM to S3..."
-        # Change this line (around line 208 in your script)
         bash "$S3_UPLOAD_SCRIPT" "$S3_BUCKET" "" "$CONFIG_NUM" &
     else
         echo "S3 upload script not found at $S3_UPLOAD_SCRIPT, skipping upload."

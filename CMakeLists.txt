@@ -3,7 +3,7 @@ project(simulation)
 
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(Boost 1.74.0 COMPONENTS system filesystem serialization program_options REQUIRED)
+find_package(Boost 1.76.0 COMPONENTS system filesystem serialization program_options REQUIRED)
 
 if(Boost_FOUND)
     message(STATUS "Boost_INCLUDE_DIRS: ${Boost_INCLUDE_DIRS}")
@@ -13,13 +13,7 @@ if(Boost_FOUND)
 endif()
 
 # Find Python and pybind11 for DeepTrader
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-set(pybind11_DIR "/usr/lib/cmake/pybind11" CACHE PATH "Directory containing pybind11Config.cmake")
-find_package(pybind11 REQUIRED)
-include_directories(
-    ${Python3_INCLUDE_DIRS}
-    ${Python3_NumPy_INCLUDE_DIRS}
-)
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 # Flexible ONNX Runtime detection
 # Try to find ONNX Runtime using multiple methods
@@ -43,11 +37,11 @@ find_library(ONNXRUNTIME_LIB
 
 # Fallback to environment variable or default Homebrew path if not found
 if(NOT ONNXRUNTIME_LIB)
-    set(ONNXRUNTIME_LIB "/opt/homebrew/Cellar/onnxruntime/1.21.0/lib/libonnxruntime.dylib")
+    set(ONNXRUNTIME_LIB "/usr/lib/libonnxruntime.so")
 endif()
 
 if(NOT ONNXRUNTIME_INCLUDE_DIR)
-    set(ONNXRUNTIME_INCLUDE_DIR "/opt/homebrew/Cellar/onnxruntime/1.21.0/include")
+    set(ONNXRUNTIME_INCLUDE_DIR "/usr/include/onnxruntime")
 endif()
 
 # Verify ONNX Runtime is found
@@ -61,7 +55,7 @@ else()
 endif()
 
 # Find JSON library
-find_package(nlohmann_json REQUIRED)
+include_directories(/usr/include/nlohmann)
 
 add_executable(simulation src/main.cpp
                           src/networking/tcpserver.cpp
@@ -86,9 +80,6 @@ endif()
 
 target_link_libraries(simulation 
     ${Python3_LIBRARIES}
-    pybind11::embed
-    pybind11::module
-    nlohmann_json::nlohmann_json
     ${ONNXRUNTIME_LIB}  # Add ONNX Runtime library here
     dl                  # Dynamic linking library
     pthread             # POSIX threads library

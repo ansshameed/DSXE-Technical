@@ -2,12 +2,12 @@
 
 # Configuration parameters
 MARKETS_FILE="./markets_profits.csv"
-XML_CONFIG="/app/build/simulationexample.xml"
+XML_CONFIG="../simulationexample.xml"
 SIMULATION_EXECUTABLE="./simulation"
-TRIALS=500  # Number of trials to run per configuration
+TRIALS=2  # Number of trials to run per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
-INJECTOR_PORT=8088
+INJECTOR_PORT=8089
 BASE_ORCHESTRATOR_PORT=10001
 TEMP_CONFIG_PATH="./temp_config.csv"
 
@@ -68,8 +68,8 @@ cleanup() {
     
     # Force release ports
     echo "Forcibly releasing ports..."
-    fuser -k 9999/tcp 8088/tcp 10001/tcp 10002/tcp 10003/tcp 10004/tcp 10005/tcp 2>/dev/null || true
-    sleep 1
+    fuser -k 9999/tcp 8089/tcp 10001/tcp 10002/tcp 10003/tcp 10004/tcp 10005/tcp 2>/dev/null || true
+    sleep 5
 }
 
 # Extract profits from the profit files and consolidate them
