@@ -7,6 +7,7 @@ set -e
 export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
 export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
 export AWS_REGION="eu-north-1"
+export POD_NAME=${POD_NAME:-$(hostname)}
 
 # Input parameters with defaults
 S3_BUCKET=${1:-"dsxe-results"}
@@ -44,7 +45,7 @@ upload_specific_file() {
     
     # Create new filename with configuration number
     local filename=$(basename "$src_file")
-    local new_filename="config_${config}_profits.csv"
+    local new_filename="config_${config}_${POD_NAME}_profits.csv"
     
     # Copy file to temp directory with new filename
     cp "$src_file" "$TEMP_DIR/$new_filename"
@@ -82,7 +83,7 @@ upload_directory() {
             local config_num=$(echo "$filename" | grep -oP 'config_\K\d+' || echo "unknown")
             
             # Create new filename
-            local new_filename="config_${config_num}_profits.csv"
+            local new_filename="config_${config_num}_${POD_NAME}_profits.csv"
             
             # Copy file to temp directory with new filename
             cp "$file" "$TEMP_DIR/$new_filename"
@@ -115,7 +116,7 @@ else
                 config_num=$(echo "$(basename "$file")" | grep -oP 'config_\K\d+' || echo "$CONFIG_NUM")
                 
                 # Create new filename
-                new_filename="config_${config_num}_profits.csv"
+                new_filename="config_${config_num}_${POD_NAME}_profits.csv"
                 
                 # Copy file to temp directory with new filename
                 cp "$file" "$TEMP_DIR/$new_filename"

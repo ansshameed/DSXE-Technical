@@ -4,12 +4,13 @@
 MARKETS_FILE="./markets_profits.csv"
 XML_CONFIG="../simulationexample.xml"
 SIMULATION_EXECUTABLE="./simulation"
-TRIALS=2  # Number of trials to run per configuration
+TRIALS=500 # Number of trials to run per configuration
 RESULTS_DIR="./results"
 EXCHANGE_PORT=9999
 INJECTOR_PORT=8089
 BASE_ORCHESTRATOR_PORT=10001
 TEMP_CONFIG_PATH="./temp_config.csv"
+export POD_NAME=${POD_NAME:-$(hostname)}
 
 # S3 upload parameters
 S3_BUCKET="dsxe-results"
@@ -30,8 +31,17 @@ upload_to_s3() {
     local source_file="$1"
     local destination_key="$2"
     
-    echo "Uploading $source_file to s3://$S3_BUCKET/$destination_key"
-    aws s3 cp "$source_file" "s3://$S3_BUCKET/$destination_key"
+    # Add POD_NAME to the destination key
+    local pod_name=${POD_NAME:-$(hostname)}
+    # Extract the filename from the destination key
+    local base_filename=$(basename "$destination_key")
+    local dir_path=$(dirname "$destination_key")
+    # Create a new filename with pod name
+    local new_filename="${base_filename%.csv}_${pod_name}.csv"
+    local new_destination_key="${dir_path}/${new_filename}"
+    
+    echo "Uploading $source_file to s3://$S3_BUCKET/$new_destination_key"
+    aws s3 cp "$source_file" "s3://$S3_BUCKET/$new_destination_key"
     
     local upload_status=$?
     if [ $upload_status -eq 0 ]; then
@@ -69,7 +79,7 @@ cleanup() {
     # Force release ports
     echo "Forcibly releasing ports..."
     fuser -k 9999/tcp 8089/tcp 10001/tcp 10002/tcp 10003/tcp 10004/tcp 10005/tcp 2>/dev/null || true
-    sleep 5
+    sleep 1
 }
 
 # Extract profits from the profit files and consolidate them

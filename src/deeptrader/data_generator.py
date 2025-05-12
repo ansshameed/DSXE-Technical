@@ -19,7 +19,7 @@ import json
 import os
 
 # Constants
-BATCHSIZE = 1000  # (Change this back to 16384 once we have all the data). Number of LOB snapshots processed simulataneously through NN during each training step
+BATCHSIZE = 16384  
 NUMBER_OF_FEATURES = 13  # First 13 columns are features
 NUMBER_OF_STEPS = 1      # For LSTM sequence length; treating each snapshot as independent datapoint without considering relationship to previous snapshots. If value e.g. 10 LSTM would be fed sequences of 10 snapshots to predict next value; learn temporal patterns in the market data for predictions. 5 = 5 consecutive lob snapshots to learn temporal patterns
 
@@ -62,7 +62,7 @@ class DeepTraderDataGenerator(Sequence):
         self.train_min = np.empty((self.n_features + 1))
         
         try:
-            with open(os.path.join(os.path.dirname(dataset_path), 'min_max_values.json'), 'r') as f:
+            with open(os.path.join(os.path.dirname(dataset_path), 'min_max_values_2.json'), 'r') as f:
                 min_max_data = json.load(f)
                 self.train_min = np.array(min_max_data['min_values'])
                 self.train_max = np.array(min_max_data['max_values'])
@@ -117,7 +117,7 @@ class DeepTraderDataGenerator(Sequence):
 
 if __name__ == "__main__":
     # Example usage
-    data_path = "normalised_data/normalised_data.pkl"
+    data_path = "normalised_data/normalised_data_2.pkl"
     generator = DeepTraderDataGenerator(data_path)
     
     # Test the first batch

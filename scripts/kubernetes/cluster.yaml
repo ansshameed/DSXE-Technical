@@ -13,9 +13,9 @@ nodeGroups:
       onDemandBaseCapacity: 0
       onDemandPercentageAboveBaseCapacity: 0
       spotInstancePools: 1
-    desiredCapacity: 16
+    desiredCapacity: 64
     minSize: 16
-    maxSize: 32
+    maxSize: 64
     ssh:
       allow: false
     labels: {role: worker}

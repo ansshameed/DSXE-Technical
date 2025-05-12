@@ -2,9 +2,9 @@
 
 # Configuration
 TOTAL_CONFIGS=40
-TRIALS_PER_CONFIG=1
+TRIALS_PER_CONFIG=500
 
-CONFIGS_PER_BATCH=5
+CONFIGS_PER_BATCH=1
 ECR_URI="588738568626.dkr.ecr.eu-west-2.amazonaws.com/dsxe-profit-simulation"
 
 mkdir -p kubernetes/profit-jobs
@@ -30,20 +30,7 @@ spec:
   completions: 1
   backoffLimit: 4
   template:
-    metadata:
-      labels:
-        app: dsxe-profit-simulation
     spec:
-      affinity:
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: "app"
-                    operator: In
-                    values:
-                      - dsxe-profit-simulation
-              topologyKey: "kubernetes.io/hostname"
       containers:
       - name: dsxe-profit-simulation
         image: $ECR_URI:latest
@@ -60,7 +47,7 @@ spec:
         - name: CONFIG_END
           value: "$CONFIG_END"
         - name: TRIALS_PER_CONFIG
-          value: "$TRIALS_PER_CONFIG"
+          value: "500"
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
             secretKeyRef:

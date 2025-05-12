@@ -3,7 +3,7 @@
 # Read configuration range from environment variables (with defaults)
 CONFIG_START=${CONFIG_START:-0}
 CONFIG_END=${CONFIG_END:-39}  # Default to all 40 configurations
-TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-2}  # Default to 500 trials per config
+TRIALS_PER_CONFIG=${TRIALS_PER_CONFIG:-500}  # Default to 500 trials per config
 
 echo "===== CHECKING AWS CREDENTIALS ====="
 if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
@@ -31,9 +31,9 @@ if [ "$CONFIG_START" -ne 0 ] || [ "$CONFIG_END" -ne 39 ]; then
   echo "Processing $TOTAL_CONFIGS profit configurations from the range"
 fi
 
-if [ "$TRIALS_PER_CONFIG" -ne 2 ]; then
+if [ "$TRIALS_PER_CONFIG" -ne 500 ]; then
   echo "Setting trials per configuration to $TRIALS_PER_CONFIG..."
-  sed -i "s/TRIALS=2/TRIALS=$TRIALS_PER_CONFIG/" ./run_profit_simulations.sh
+  sed -i "s/TRIALS=500/TRIALS=$TRIALS_PER_CONFIG/" ./run_profit_simulations.sh
 fi
 
 # Create simulation timestamp based on batch
